@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/*
+ * Paleta provisória, apenas para o protótipo visual (Fase 2).
+ * Nenhuma identidade visual final ou logo foi aplicada ainda.
+ * Todas as cores ficam centralizadas aqui para facilitar troca futura.
+ */
+:root {
+  --background: #f8f7f6;
+  --surface: #ffffff;
+  --foreground: #1f1b1a;
+  --border: #e6e1de;
+  --muted: #efece9;
+
+  --brand: #c4467a;
+  --brand-secondary: #2f2a4a;
+  --brand-accent: #e0a951;
+
+  --status-aguardando: #b45309;
+  --status-confirmado: #2563eb;
+  --status-em-atendimento: #7c3aed;
+  --status-finalizado: #15803d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+
+  --color-brand: var(--brand);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-accent: var(--brand-accent);
+
+  --color-status-aguardando: var(--status-aguardando);
+  --color-status-confirmado: var(--status-confirmado);
+  --color-status-em-atendimento: var(--status-em-atendimento);
+  --color-status-finalizado: var(--status-finalizado);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141110;
+    --surface: #1c1918;
+    --foreground: #f2efed;
+    --border: #322c2a;
+    --muted: #262220;
+
+    --brand-secondary: #6b5f96;
+    --brand-accent: #f0c274;
+
+    --status-aguardando: #d99a3f;
+    --status-confirmado: #60a5fa;
+    --status-em-atendimento: #a78bfa;
+    --status-finalizado: #4ade80;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
