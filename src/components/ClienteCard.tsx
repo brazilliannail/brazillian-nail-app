@@ -13,7 +13,10 @@ type ClienteCardProps = {
 export function ClienteCard({ cliente, selected, onSelect }: ClienteCardProps) {
   const { t } = useLanguage();
   const c = t.clientes;
-  const inicial = cliente.nome.trim().charAt(0).toUpperCase();
+  const nomeExibicao = cliente.nomePreferencia ?? cliente.nome;
+  const inicial = nomeExibicao.trim().charAt(0).toUpperCase();
+  const telefonePrincipal = cliente.contatoPrincipal?.telefone ?? null;
+  const idiomaPrincipal = cliente.contatoPrincipal?.idioma ?? null;
 
   return (
     <button
@@ -29,10 +32,15 @@ export function ClienteCard({ cliente, selected, onSelect }: ClienteCardProps) {
             {inicial}
           </span>
           <div className="min-w-0">
-            <p className="truncate font-semibold text-foreground">{cliente.nome}</p>
-            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/60">
-              {t.clientes.idiomaLabel[cliente.idioma]}
-            </span>
+            <p className="truncate font-semibold text-foreground">{nomeExibicao}</p>
+            {cliente.nomePreferencia && (
+              <p className="truncate text-xs text-foreground/50">{cliente.nome}</p>
+            )}
+            {idiomaPrincipal && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/60">
+                {t.clientes.idiomaLabel[idiomaPrincipal]}
+              </span>
+            )}
           </div>
         </div>
         <span
@@ -54,10 +62,10 @@ export function ClienteCard({ cliente, selected, onSelect }: ClienteCardProps) {
           </dt>
           <dd
             className={
-              cliente.telefone ? "font-medium text-foreground" : "italic text-foreground/40"
+              telefonePrincipal ? "font-medium text-foreground" : "italic text-foreground/40"
             }
           >
-            {cliente.telefone ?? c.campos.semTelefone}
+            {telefonePrincipal ?? c.campos.semTelefone}
           </dd>
         </div>
         <div className="flex items-center justify-between gap-2">

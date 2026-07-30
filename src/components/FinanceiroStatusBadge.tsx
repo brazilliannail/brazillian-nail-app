@@ -2,7 +2,7 @@
 
 import { useLanguage } from "@/components/LanguageProvider";
 import { CheckIcon, ClockIcon, GiftIcon } from "@/components/icons";
-import type { StatusPagamento } from "@/lib/financeiro-mock";
+import type { StatusPagamento } from "@/lib/financeiro-service";
 
 const STATUS_STYLES: Record<StatusPagamento, { badge: string; icon: React.ComponentType<{ className?: string }> }> = {
   recebido: {

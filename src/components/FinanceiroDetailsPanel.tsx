@@ -3,24 +3,44 @@
 import { useLanguage } from "@/components/LanguageProvider";
 import { FinanceiroStatusBadge } from "@/components/FinanceiroStatusBadge";
 import { CloseIcon, PlusIcon, EditIcon, CalendarIcon, UsersIcon, HistoryIcon } from "@/components/icons";
-import type { Pagamento } from "@/lib/financeiro-mock";
+import type { AtendimentoFinanceiro } from "@/lib/financeiro-service";
 
 function formatCurrency(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
 type FinanceiroDetailsPanelProps = {
-  pagamento: Pagamento;
+  pagamento: AtendimentoFinanceiro;
   onClose: () => void;
+  onEstornar: () => void;
+  onRegistrarPagamento: () => void;
+  onCorrigirPagamento: () => void;
+  corrigirPagamentoDesabilitado: boolean;
+  onAbrirAtendimento: () => void;
+  onAbrirCliente: () => void;
 };
 
-export function FinanceiroDetailsPanel({ pagamento, onClose }: FinanceiroDetailsPanelProps) {
+export function FinanceiroDetailsPanel({
+  pagamento,
+  onClose,
+  onEstornar,
+  onRegistrarPagamento,
+  onCorrigirPagamento,
+  corrigirPagamentoDesabilitado,
+  onAbrirAtendimento,
+  onAbrirCliente,
+}: FinanceiroDetailsPanelProps) {
   const { locale, t } = useLanguage();
   const f = t.financeiro;
   const d = f.detalhes;
+
+  function handleEstornarClick() {
+    if (window.confirm(t.atendimentos.confirmarEstornar.titulo)) onEstornar();
+  }
   const servico = locale === "pt" ? pagamento.servicoPt : pagamento.servicoEn;
   const observacoes = locale === "pt" ? pagamento.observacoesPt : pagamento.observacoesEn;
   const totalDevido = pagamento.valorServicos - pagamento.desconto;
+  const atendimentoRelacionado = `${servico} · ${pagamento.dataAtendimento}`;
 
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-sm">
@@ -45,7 +65,7 @@ export function FinanceiroDetailsPanel({ pagamento, onClose }: FinanceiroDetails
         <dl className="flex flex-col gap-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{d.atendimentoRelacionado}</dt>
-            <dd className="text-right font-medium text-foreground">{pagamento.atendimentoRelacionado}</dd>
+            <dd className="text-right font-medium text-foreground">{atendimentoRelacionado}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{d.dataAtendimento}</dt>
@@ -122,20 +142,25 @@ export function FinanceiroDetailsPanel({ pagamento, onClose }: FinanceiroDetails
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+            disabled={pagamento.saldoPendente <= 0}
+            onClick={onRegistrarPagamento}
+            className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
           >
             <PlusIcon className="h-4 w-4" />
             {d.acoes.registrarNovoPagamento}
           </button>
           <button
             type="button"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
+            disabled={corrigirPagamentoDesabilitado}
+            onClick={onCorrigirPagamento}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted active:scale-[0.98]"
           >
             <EditIcon className="h-4 w-4" />
             {d.acoes.corrigirPagamento}
           </button>
           <button
             type="button"
+            onClick={onAbrirAtendimento}
             className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
           >
             <CalendarIcon className="h-4 w-4" />
@@ -143,6 +168,7 @@ export function FinanceiroDetailsPanel({ pagamento, onClose }: FinanceiroDetails
           </button>
           <button
             type="button"
+            onClick={onAbrirCliente}
             className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
           >
             <UsersIcon className="h-4 w-4" />
@@ -150,6 +176,7 @@ export function FinanceiroDetailsPanel({ pagamento, onClose }: FinanceiroDetails
           </button>
           <button
             type="button"
+            onClick={handleEstornarClick}
             className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-3 text-sm font-medium text-red-600 transition-transform hover:bg-red-50 active:scale-[0.98] dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30"
           >
             <HistoryIcon className="h-4 w-4" />

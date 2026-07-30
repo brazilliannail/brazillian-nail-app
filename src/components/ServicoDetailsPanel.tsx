@@ -11,12 +11,15 @@ function formatCurrency(value: number) {
 type ServicoDetailsPanelProps = {
   servico: Servico;
   onClose: () => void;
+  onEdit: () => void;
+  onToggleStatus: () => void;
 };
 
-export function ServicoDetailsPanel({ servico, onClose }: ServicoDetailsPanelProps) {
+export function ServicoDetailsPanel({ servico, onClose, onEdit, onToggleStatus }: ServicoDetailsPanelProps) {
   const { locale, t } = useLanguage();
   const s = t.servicos;
   const d = s.detalhes;
+  const nomeExibido = locale === "en" && servico.nomeEn ? servico.nomeEn : servico.nome;
   const descricao = locale === "pt" ? servico.descricaoPt : servico.descricaoEn;
   const observacoes = locale === "pt" ? servico.observacoesPt : servico.observacoesEn;
 
@@ -29,7 +32,7 @@ export function ServicoDetailsPanel({ servico, onClose }: ServicoDetailsPanelPro
           </span>
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-foreground/50">{d.titulo}</p>
-            <h3 className="truncate text-lg font-semibold text-foreground">{servico.nome}</h3>
+            <h3 className="truncate text-lg font-semibold text-foreground">{nomeExibido}</h3>
           </div>
         </div>
         <button
@@ -116,6 +119,7 @@ export function ServicoDetailsPanel({ servico, onClose }: ServicoDetailsPanelPro
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
+            onClick={onEdit}
             className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
           >
             <EditIcon className="h-4 w-4" />
@@ -123,6 +127,7 @@ export function ServicoDetailsPanel({ servico, onClose }: ServicoDetailsPanelPro
           </button>
           <button
             type="button"
+            onClick={onToggleStatus}
             className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
           >
             <PowerIcon className="h-4 w-4" />

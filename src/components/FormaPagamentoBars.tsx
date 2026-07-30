@@ -8,7 +8,7 @@ function formatCurrency(value: number) {
 }
 
 type FormaPagamentoBarsProps = {
-  dados: { forma: FormaPagamento; valor: number }[];
+  dados: { forma: FormaPagamento | null; valor: number }[];
 };
 
 export function FormaPagamentoBars({ dados }: FormaPagamentoBarsProps) {
@@ -19,11 +19,16 @@ export function FormaPagamentoBars({ dados }: FormaPagamentoBarsProps) {
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-6">
       <p className="text-sm font-semibold text-foreground">{f.formasPagamento.titulo}</p>
+      {dados.length === 0 ? (
+        <p className="text-sm text-foreground/60">{f.vazio}</p>
+      ) : (
       <div className="flex flex-col gap-3">
         {dados.map((item) => (
-          <div key={item.forma} className="flex flex-col gap-1.5">
+          <div key={item.forma ?? "naoDefinida"} className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-foreground/70">{f.formaPagamentoLabel[item.forma]}</span>
+              <span className="text-foreground/70">
+                {item.forma ? f.formaPagamentoLabel[item.forma] : f.detalhes.formaPagamentoNaoDefinida}
+              </span>
               <span className="font-medium text-foreground">{formatCurrency(item.valor)}</span>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
@@ -35,6 +40,7 @@ export function FormaPagamentoBars({ dados }: FormaPagamentoBarsProps) {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

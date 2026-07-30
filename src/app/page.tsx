@@ -2,22 +2,39 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility } from "@/components/FinancialVisibilityProvider";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClockIcon, CalendarIcon, WalletIcon, BellIcon, PlusIcon, UserPlusIcon, ZapIcon } from "@/components/icons";
 import { mockAgendaHoje, mockResumoHoje } from "@/lib/mock-data";
 
+const VALOR_OCULTO = "••••••";
+
 export default function Home() {
   const { locale, t } = useLanguage();
+  const { visible } = useFinancialVisibility();
 
   return (
     <div className="flex flex-col gap-8">
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard icon={ClockIcon} label={t.cards.proximoAtendimento} value={mockResumoHoje.proximoAtendimento} tone="brand" />
         <StatCard icon={CalendarIcon} label={t.cards.agendamentosHoje} value={mockResumoHoje.agendamentosHoje} />
-        <StatCard icon={WalletIcon} label={t.cards.totalRecebidoHoje} value={mockResumoHoje.totalRecebidoHoje} tone="brand" />
-        <StatCard icon={WalletIcon} label={t.cards.totalEstimadoDia} value={mockResumoHoje.totalEstimadoDia} />
-        <StatCard icon={WalletIcon} label={t.cards.valoresPendentes} value={mockResumoHoje.valoresPendentes} />
+        <StatCard
+          icon={WalletIcon}
+          label={t.cards.totalRecebidoHoje}
+          value={visible ? mockResumoHoje.totalRecebidoHoje : VALOR_OCULTO}
+          tone="brand"
+        />
+        <StatCard
+          icon={WalletIcon}
+          label={t.cards.totalEstimadoDia}
+          value={visible ? mockResumoHoje.totalEstimadoDia : VALOR_OCULTO}
+        />
+        <StatCard
+          icon={WalletIcon}
+          label={t.cards.valoresPendentes}
+          value={visible ? mockResumoHoje.valoresPendentes : VALOR_OCULTO}
+        />
         <StatCard icon={BellIcon} label={t.cards.lembretesAmanha} value={mockResumoHoje.lembretesAmanha} />
       </section>
 

@@ -3,14 +3,14 @@
 import { useLanguage } from "@/components/LanguageProvider";
 import { FinanceiroStatusBadge } from "@/components/FinanceiroStatusBadge";
 import { CalendarIcon } from "@/components/icons";
-import type { Pagamento } from "@/lib/financeiro-mock";
+import type { AtendimentoFinanceiro } from "@/lib/financeiro-service";
 
 function formatCurrency(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
 type PagamentoCardProps = {
-  pagamento: Pagamento;
+  pagamento: AtendimentoFinanceiro;
   selected: boolean;
   onSelect: (id: string) => void;
 };
@@ -23,7 +23,7 @@ export function PagamentoCard({ pagamento, selected, onSelect }: PagamentoCardPr
   return (
     <button
       type="button"
-      onClick={() => onSelect(pagamento.id)}
+      onClick={() => onSelect(pagamento.atendimentoId)}
       className={`flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 text-left shadow-sm transition-colors hover:bg-muted/50 sm:p-5 ${
         selected ? "ring-2 ring-brand" : ""
       }`}

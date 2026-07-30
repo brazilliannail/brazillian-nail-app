@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useClientes } from "@/components/ClientesProvider";
 import { LembreteCard } from "@/components/LembreteCard";
 import { LembreteDetailsPanel } from "@/components/LembreteDetailsPanel";
 import { ConfigurarHorarioModal } from "@/components/ConfigurarHorarioModal";
@@ -12,6 +13,7 @@ import { mockLembretes, type Lembrete, type LembreteStatus } from "@/lib/lembret
 
 export default function LembretesPage() {
   const { t } = useLanguage();
+  const { getCliente } = useClientes();
   const l = t.lembretes;
   const [lembretes, setLembretes] = useState<Lembrete[]>(mockLembretes);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -27,9 +29,9 @@ export default function LembretesPage() {
       aguardando: lembretes.filter((item) => item.statusAgendamento === "aguardando").length,
       pendentes: lembretes.filter((item) => item.statusLembrete === "pendente").length,
       preparados: lembretes.filter((item) => item.statusLembrete === "preparado").length,
-      semTelefone: lembretes.filter((item) => item.telefone === null).length,
+      semTelefone: lembretes.filter((item) => !getCliente(item.clienteId)?.contatoPrincipal).length,
     }),
-    [lembretes],
+    [lembretes, getCliente],
   );
 
   function updateStatus(id: string, status: LembreteStatus) {
@@ -39,6 +41,12 @@ export default function LembretesPage() {
   function updateMensagem(id: string, mensagem: string) {
     setLembretes((current) =>
       current.map((item) => (item.id === id ? { ...item, mensagemPersonalizada: mensagem } : item)),
+    );
+  }
+
+  function updateMensagemSecundario(id: string, mensagem: string) {
+    setLembretes((current) =>
+      current.map((item) => (item.id === id ? { ...item, mensagemPersonalizadaSecundario: mensagem } : item)),
     );
   }
 
@@ -104,6 +112,7 @@ export default function LembretesPage() {
             onClose={() => setSelectedId(null)}
             onUpdateStatus={updateStatus}
             onUpdateMensagem={updateMensagem}
+            onUpdateMensagemSecundario={updateMensagemSecundario}
           />
         </div>
       )}
@@ -118,6 +127,7 @@ export default function LembretesPage() {
               onClose={() => setSelectedId(null)}
               onUpdateStatus={updateStatus}
               onUpdateMensagem={updateMensagem}
+            onUpdateMensagemSecundario={updateMensagemSecundario}
             />
           </div>
         </div>

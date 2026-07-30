@@ -1,19 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useClientes } from "@/components/ClientesProvider";
 import { AtendimentoStatusBadge } from "@/components/AtendimentoStatusBadge";
-import {
-  CloseIcon,
-  PlayIcon,
-  PlusIcon,
-  EditIcon,
-  TagIcon,
-  WalletIcon,
-  CashIcon,
-  DoubleCheckIcon,
-  UsersIcon,
-  HistoryIcon,
-} from "@/components/icons";
+import { CloseIcon, EditIcon, DoubleCheckIcon, HistoryIcon, AlertIcon, PlusIcon } from "@/components/icons";
 import { valorTotalDevido, saldoPendente, type Atendimento } from "@/lib/atendimentos-mock";
 
 function formatCurrency(value: number) {
@@ -23,12 +14,38 @@ function formatCurrency(value: number) {
 type AtendimentoDetailsPanelProps = {
   atendimento: Atendimento;
   onClose: () => void;
+  onEdit: () => void;
+  onConcluir: () => void;
+  onCancelar: () => void;
+  onEstornar: () => void;
+  onRegistrarPagamento: () => void;
 };
 
-export function AtendimentoDetailsPanel({ atendimento, onClose }: AtendimentoDetailsPanelProps) {
+/** Espelha a restrição real de `registrarPagamentoAdicionalAction` (atendimentos-actions.ts) —
+ * só um atendimento finalizado com saldo em aberto aceita novo lançamento; "emAndamento" ainda
+ * não tem pagamento nenhum (nasce ao concluir) e "cancelado"/"estornado"/"finalizadoCortesia"
+ * nunca voltam a ter saldo pendente. */
+const STATUS_ACEITA_NOVO_PAGAMENTO = new Set<Atendimento["status"]>(["finalizadoPendente", "finalizadoParcial"]);
+
+export function AtendimentoDetailsPanel({
+  atendimento,
+  onClose,
+  onEdit,
+  onConcluir,
+  onCancelar,
+  onEstornar,
+  onRegistrarPagamento,
+}: AtendimentoDetailsPanelProps) {
   const { locale, t } = useLanguage();
+  const { getCliente } = useClientes();
   const a = t.atendimentos;
+  const c = t.clientes;
   const d = a.detalhes;
+
+  const [confirmando, setConfirmando] = useState<"cancelar" | "estornar" | null>(null);
+
+  const cliente = getCliente(atendimento.clienteId);
+  const nomeExibicao = cliente?.nomePreferencia ?? cliente?.nome ?? "—";
 
   const devido = valorTotalDevido(atendimento);
   const pendente = saldoPendente(atendimento);
@@ -38,24 +55,22 @@ export function AtendimentoDetailsPanel({ atendimento, onClose }: AtendimentoDet
   const isEmAndamento = atendimento.status === "emAndamento";
   const isEncerrado = atendimento.status === "cancelado" || atendimento.status === "estornado";
   const temSaldoPendente = pendente > 0;
-
-  const primaryAction = isEmAndamento
-    ? { label: d.acoes.continuar, icon: PlayIcon }
-    : temSaldoPendente
-      ? { label: d.acoes.registrarPagamento, icon: CashIcon }
-      : { label: d.acoes.abrirFicha, icon: UsersIcon };
-
-  const showRegistrarPagamentoSecundario = isEmAndamento && temSaldoPendente;
-  const showAbrirFichaSecundario = isEmAndamento || temSaldoPendente;
-  const showEdicoes = !isEncerrado;
-  const PrimaryIcon = primaryAction.icon;
+  const podeRegistrarPagamento = temSaldoPendente && STATUS_ACEITA_NOVO_PAGAMENTO.has(atendimento.status);
 
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-sm">
       <div className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b border-border bg-surface p-5">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-foreground/50">{d.titulo}</p>
-          <h3 className="truncate text-lg font-semibold text-foreground">{atendimento.cliente}</h3>
+          <h3 className="truncate text-lg font-semibold text-foreground">{nomeExibicao}</h3>
+          {cliente?.nomePreferencia && (
+            <p className="truncate text-xs text-foreground/50">{cliente.nome}</p>
+          )}
+          {cliente?.status === "inativa" && (
+            <span className="mt-1 inline-flex w-fit items-center rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium text-foreground/50">
+              {c.statusLabel.inativa}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -98,12 +113,12 @@ export function AtendimentoDetailsPanel({ atendimento, onClose }: AtendimentoDet
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold text-foreground">{d.servicosRealizados}</p>
           <ul className="flex flex-col divide-y divide-border rounded-xl border border-border">
-            {atendimento.servicos.map((servico) => (
+            {atendimento.servicos.map((servico, index) => (
               <li
-                key={servico.nomePt}
+                key={`${servico.nomePt}-${index}`}
                 className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
               >
-                <span className="text-foreground">{locale === "pt" ? servico.nomePt : servico.nomeEn}</span>
+                <span className="text-foreground">{(locale === "pt" ? servico.nomePt : servico.nomeEn) || servico.nomePt}</span>
                 <span className="font-medium text-foreground">{formatCurrency(servico.valor)}</span>
               </li>
             ))}
@@ -168,89 +183,48 @@ export function AtendimentoDetailsPanel({ atendimento, onClose }: AtendimentoDet
                 : `${atendimento.retornoSugeridoDias} ${d.dias}`}
             </dd>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-foreground/50">{d.proximoAgendamento}</dt>
-            <dd className="font-medium text-foreground">
-              {atendimento.proximoAgendamento ?? d.semProximoAgendamento}
-            </dd>
-          </div>
         </dl>
 
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
-          >
-            <PrimaryIcon className="h-4 w-4" />
-            {primaryAction.label}
-          </button>
-
-          {showEdicoes && (
-            <>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
-              >
-                <PlusIcon className="h-4 w-4" />
-                {d.acoes.adicionarServico}
-              </button>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
-              >
-                <EditIcon className="h-4 w-4" />
-                {d.acoes.alterarValor}
-              </button>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
-              >
-                <TagIcon className="h-4 w-4" />
-                {d.acoes.aplicarDesconto}
-              </button>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
-              >
-                <WalletIcon className="h-4 w-4" />
-                {d.acoes.adicionarGorjeta}
-              </button>
-            </>
-          )}
-
-          {showRegistrarPagamentoSecundario && (
-            <button
-              type="button"
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
-            >
-              <CashIcon className="h-4 w-4" />
-              {d.acoes.registrarPagamento}
-            </button>
-          )}
-
           {isEmAndamento && (
             <button
               type="button"
-              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
+              onClick={onConcluir}
+              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
             >
               <DoubleCheckIcon className="h-4 w-4" />
               {d.acoes.finalizar}
             </button>
           )}
 
-          {showAbrirFichaSecundario && (
+          {podeRegistrarPagamento && (
             <button
               type="button"
-              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
+              onClick={onRegistrarPagamento}
+              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
             >
-              <UsersIcon className="h-4 w-4" />
-              {d.acoes.abrirFicha}
+              <PlusIcon className="h-4 w-4" />
+              {d.acoes.registrarPagamento}
+            </button>
+          )}
+
+          {!isEncerrado && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={`flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98] ${
+                isEmAndamento ? "" : "col-span-2"
+              }`}
+            >
+              <EditIcon className="h-4 w-4" />
+              {d.acoes.editar}
             </button>
           )}
 
           {isEmAndamento && (
             <button
               type="button"
+              onClick={() => setConfirmando("cancelar")}
               className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-3 text-sm font-medium text-red-600 transition-transform hover:bg-red-50 active:scale-[0.98] dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30"
             >
               <CloseIcon className="h-4 w-4" />
@@ -260,6 +234,7 @@ export function AtendimentoDetailsPanel({ atendimento, onClose }: AtendimentoDet
           {!isEmAndamento && !isEncerrado && (
             <button
               type="button"
+              onClick={() => setConfirmando("estornar")}
               className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-3 text-sm font-medium text-red-600 transition-transform hover:bg-red-50 active:scale-[0.98] dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30"
             >
               <HistoryIcon className="h-4 w-4" />
@@ -268,6 +243,48 @@ export function AtendimentoDetailsPanel({ atendimento, onClose }: AtendimentoDet
           )}
         </div>
       </div>
+
+      {confirmando && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setConfirmando(null)}
+        >
+          <div
+            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl bg-surface p-5 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-status-aguardando/10 text-status-aguardando">
+                <AlertIcon className="h-5 w-5" />
+              </span>
+              <p className="pt-1.5 text-sm font-semibold text-foreground">
+                {confirmando === "cancelar" ? a.confirmarCancelar.titulo : a.confirmarEstornar.titulo}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmando(null)}
+                className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
+              >
+                {confirmando === "cancelar" ? a.confirmarCancelar.voltar : a.confirmarEstornar.voltar}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const acao = confirmando;
+                  setConfirmando(null);
+                  if (acao === "cancelar") onCancelar();
+                  else onEstornar();
+                }}
+                className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition-transform hover:bg-red-50 active:scale-[0.98] dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                {confirmando === "cancelar" ? a.confirmarCancelar.confirmar : a.confirmarEstornar.confirmar}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

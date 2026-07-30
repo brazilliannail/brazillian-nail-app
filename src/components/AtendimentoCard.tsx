@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
+import { useClientes } from "@/components/ClientesProvider";
 import { AtendimentoStatusBadge } from "@/components/AtendimentoStatusBadge";
 import { CalendarIcon } from "@/components/icons";
 import { valorTotalDevido, saldoPendente, type Atendimento } from "@/lib/atendimentos-mock";
@@ -17,7 +18,10 @@ type AtendimentoCardProps = {
 
 export function AtendimentoCard({ atendimento, selected, onSelect }: AtendimentoCardProps) {
   const { locale, t } = useLanguage();
+  const { getCliente } = useClientes();
   const a = t.atendimentos;
+  const cliente = getCliente(atendimento.clienteId);
+  const nomeExibicao = cliente?.nomePreferencia ?? cliente?.nome ?? "—";
   const devido = valorTotalDevido(atendimento);
   const pendente = saldoPendente(atendimento);
   const servicoNome = atendimento.servicos
@@ -34,7 +38,7 @@ export function AtendimentoCard({ atendimento, selected, onSelect }: Atendimento
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-foreground">{atendimento.cliente}</p>
+          <p className="truncate font-semibold text-foreground">{nomeExibicao}</p>
           <p className="flex items-center gap-1.5 text-xs text-foreground/50">
             <CalendarIcon className="h-3.5 w-3.5" />
             {atendimento.data} · {atendimento.horarioInicio}

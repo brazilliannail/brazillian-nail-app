@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useClientes } from "@/components/ClientesProvider";
+import { ContatoAcoesMensagem } from "@/components/ContatoAcoesMensagem";
 import {
   CloseIcon,
   AlertIcon,
@@ -22,6 +24,7 @@ type LembreteDetailsPanelProps = {
   onClose: () => void;
   onUpdateStatus: (id: string, status: LembreteStatus) => void;
   onUpdateMensagem: (id: string, mensagem: string) => void;
+  onUpdateMensagemSecundario: (id: string, mensagem: string) => void;
 };
 
 const actionButtonClasses =
@@ -33,17 +36,33 @@ export function LembreteDetailsPanel({
   onClose,
   onUpdateStatus,
   onUpdateMensagem,
+  onUpdateMensagemSecundario,
 }: LembreteDetailsPanelProps) {
   const { t } = useLanguage();
+  const { getCliente } = useClientes();
   const c = t.clientes;
   const l = t.lembretes;
   const p = l.painel;
-  const servico = lembrete.idioma === "pt" ? lembrete.servicoPt : lembrete.servicoEn;
-  const mensagem = lembrete.mensagemPersonalizada ?? buildMensagemLembrete(lembrete, dataAmanha);
+
+  const cliente = getCliente(lembrete.clienteId);
+  const nomeExibicao = cliente?.nomePreferencia ?? cliente?.nome ?? "—";
+  const contato = cliente?.contatoPrincipal ?? null;
+  const contatoSecundario = cliente?.contatoSecundario ?? null;
+  const idioma = contato?.idioma ?? "pt";
+  const receberLembretes = contato?.receberLembretes ?? true;
+
+  const idiomaEfetivo = idioma === "bilingue" ? "pt" : idioma;
+  const servico = idiomaEfetivo === "pt" ? lembrete.servicoPt : lembrete.servicoEn;
+  const mensagem = lembrete.mensagemPersonalizada ?? buildMensagemLembrete(lembrete, cliente, contato, dataAmanha);
+  const mensagemSecundario = contatoSecundario
+    ? lembrete.mensagemPersonalizadaSecundario ?? buildMensagemLembrete(lembrete, cliente, contatoSecundario, dataAmanha)
+    : "";
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [editandoSecundario, setEditandoSecundario] = useState(false);
 
-  const semTelefone = !lembrete.telefone;
+  const semTelefone = !contato;
+  const naoRecebeLembretes = !semTelefone && !receberLembretes;
   const status = lembrete.statusLembrete;
 
   const podeMarcarPreparada = !semTelefone && status === "pendente";
@@ -76,7 +95,15 @@ export function LembreteDetailsPanel({
       <div className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b border-border bg-surface p-5">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-foreground/50">{p.titulo}</p>
-          <h3 className="truncate text-lg font-semibold text-foreground">{lembrete.cliente}</h3>
+          <h3 className="truncate text-lg font-semibold text-foreground">{nomeExibicao}</h3>
+          {cliente?.nomePreferencia && (
+            <p className="truncate text-xs text-foreground/50">{cliente.nome}</p>
+          )}
+          {cliente?.status === "inativa" && (
+            <span className="mt-1 inline-flex w-fit items-center rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium text-foreground/50">
+              {c.statusLabel.inativa}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -92,7 +119,13 @@ export function LembreteDetailsPanel({
         <dl className="flex flex-col gap-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{l.campos.idioma}</dt>
-            <dd className="font-medium text-foreground">{c.idiomaLabel[lembrete.idioma]}</dd>
+            <dd className="font-medium text-foreground">{c.idiomaLabel[idioma]}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-foreground/50">{l.campos.canalPreferido}</dt>
+            <dd className="font-medium text-foreground">
+              {contato ? c.canalLabel[contato.canalPreferido] : c.campos.semTelefone}
+            </dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{p.data}</dt>
@@ -119,6 +152,12 @@ export function LembreteDetailsPanel({
           <div className="flex flex-col gap-1 rounded-xl bg-status-aguardando/10 px-3 py-2 text-xs text-status-aguardando">
             <p className="font-semibold">{c.campos.semTelefone}</p>
             <p>{c.campos.semTelefoneExplicacao}</p>
+          </div>
+        )}
+
+        {naoRecebeLembretes && (
+          <div className="flex flex-col gap-1 rounded-xl bg-status-aguardando/10 px-3 py-2 text-xs text-status-aguardando">
+            <p className="font-semibold">{p.avisoNaoReceberTitulo}</p>
           </div>
         )}
 
@@ -166,6 +205,49 @@ export function LembreteDetailsPanel({
               <CopyIcon className="h-4 w-4" />
               {copiado ? l.acoes.mensagemCopiada : l.acoes.copiarMensagem}
             </button>
+            <ContatoAcoesMensagem
+              contato={contato!}
+              mensagem={mensagem}
+              labelWhatsapp={l.acoes.abrirWhatsapp}
+              labelSms={l.acoes.prepararSms}
+              avisoLembretesDesativados={p.avisoNaoReceber}
+            />
+          </div>
+        )}
+
+        {contatoSecundario && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">{c.detalhes.contatoSecundario}</p>
+              <button
+                type="button"
+                onClick={() => setEditandoSecundario((current) => !current)}
+                className="flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+              >
+                <EditIcon className="h-3.5 w-3.5" />
+                {editandoSecundario ? l.acoes.concluirEdicao : l.acoes.editarMensagem}
+              </button>
+            </div>
+            {editandoSecundario ? (
+              <textarea
+                autoFocus
+                value={mensagemSecundario}
+                onChange={(event) => onUpdateMensagemSecundario(lembrete.id, event.target.value)}
+                rows={6}
+                className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/40"
+              />
+            ) : (
+              <p className="whitespace-pre-wrap rounded-xl bg-muted px-3 py-2 text-sm text-foreground/80">
+                {mensagemSecundario}
+              </p>
+            )}
+            <ContatoAcoesMensagem
+              contato={contatoSecundario}
+              mensagem={mensagemSecundario}
+              labelWhatsapp={l.acoes.abrirWhatsapp}
+              labelSms={l.acoes.prepararSms}
+              avisoLembretesDesativados={p.avisoNaoReceber}
+            />
           </div>
         )}
 

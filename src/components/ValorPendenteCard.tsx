@@ -2,14 +2,14 @@
 
 import { useLanguage } from "@/components/LanguageProvider";
 import { CashIcon, CalendarIcon, UsersIcon, ChatIcon } from "@/components/icons";
-import type { mockValorPendente } from "@/lib/financeiro-mock";
+import type { PendenciaFinanceira } from "@/lib/financeiro-service";
 
 function formatCurrency(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
 type ValorPendenteCardProps = {
-  pendente: typeof mockValorPendente;
+  pendente: PendenciaFinanceira;
   selected: boolean;
   onSelect: () => void;
 };

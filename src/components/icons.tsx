@@ -405,6 +405,36 @@ export function DatabaseIcon({ className }: IconProps) {
   );
 }
 
+export function EyeIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M2.8 5.3C1.9 6.4 1.5 7.4 1.5 7.4S4.5 12.9 10 12.9c1 0 1.9-.2 2.7-.5M7.6 5.1c.7-.2 1.5-.3 2.4-.3 5.5 0 8.5 5.5 8.5 5.5s-.6 1.1-1.7 2.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8.2 8.7a2.5 2.5 0 003.4 3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M2.5 2.5l15 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function PowerIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">

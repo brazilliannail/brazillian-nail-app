@@ -19,7 +19,9 @@
   --status-aguardando: #b45309;
   --status-confirmado: #2563eb;
   --status-em-atendimento: #7c3aed;
-  --status-finalizado: #15803d;
+  --status-concluido: #15803d;
+  --status-cancelado: #dc2626;
+  --status-nao-compareceu: #57534e;
 }
 
 @theme inline {
@@ -36,7 +38,9 @@
   --color-status-aguardando: var(--status-aguardando);
   --color-status-confirmado: var(--status-confirmado);
   --color-status-em-atendimento: var(--status-em-atendimento);
-  --color-status-finalizado: var(--status-finalizado);
+  --color-status-concluido: var(--status-concluido);
+  --color-status-cancelado: var(--status-cancelado);
+  --color-status-nao-compareceu: var(--status-nao-compareceu);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -56,7 +60,9 @@
     --status-aguardando: #d99a3f;
     --status-confirmado: #60a5fa;
     --status-em-atendimento: #a78bfa;
-    --status-finalizado: #4ade80;
+    --status-concluido: #4ade80;
+    --status-cancelado: #f87171;
+    --status-nao-compareceu: #a8a29e;
   }
 }
 

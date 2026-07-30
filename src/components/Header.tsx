@@ -1,11 +1,13 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
-import { GlobeIcon } from "@/components/icons";
+import { useFinancialVisibility } from "@/components/FinancialVisibilityProvider";
+import { GlobeIcon, EyeIcon, EyeOffIcon } from "@/components/icons";
 import { formatDateMMDDYYYY } from "@/lib/date";
 
 export function Header() {
   const { locale, toggleLocale, t } = useLanguage();
+  const { visible, toggleVisible } = useFinancialVisibility();
   const today = formatDateMMDDYYYY(new Date());
 
   return (
@@ -32,6 +34,16 @@ export function Header() {
           <span className={locale === "pt" ? "text-brand" : "text-foreground/40"}>PT</span>
           <span className="text-foreground/30">/</span>
           <span className={locale === "en" ? "text-brand" : "text-foreground/40"}>EN</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleVisible}
+          aria-label={visible ? t.header.ocultarValores : t.header.mostrarValores}
+          aria-pressed={visible}
+          className="flex items-center justify-center rounded-full border border-border bg-background p-1.5 text-foreground/70 transition-colors hover:bg-muted sm:p-2"
+        >
+          {visible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
         </button>
 
         <span

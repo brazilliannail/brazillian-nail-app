@@ -18,14 +18,20 @@ export type FormaPagamento =
   | "outra";
 
 export type ServicoRealizado = {
+  /** Referência ao catálogo no momento do atendimento; `null` = serviço avulso/legado sem correspondência. */
+  servicoId: string | null;
+  /** Snapshot do nome — não é lookup ao vivo em `servicos`, preserva o histórico mesmo se o catálogo mudar depois. */
   nomePt: string;
   nomeEn: string;
+  /** Snapshot do valor efetivamente cobrado neste atendimento. */
   valor: number;
 };
 
 export type Atendimento = {
   id: string;
-  cliente: string;
+  clienteId: string;
+  /** Agendamento de origem, quando existir; `null` = encaixe sem agendamento prévio. */
+  agendamentoId: string | null;
   profissional: string;
   data: string;
   horarioInicio: string;
@@ -40,10 +46,23 @@ export type Atendimento = {
   observacoesPt: string;
   observacoesEn: string;
   retornoSugeridoDias: number | null;
-  proximoAgendamento: string | null;
+  /** Próximo agendamento gerado a partir deste atendimento; `null` = nenhum ainda. */
+  proximoAgendamentoId: string | null;
 };
 
-function somaServicos(servicos: ServicoRealizado[]) {
+/** Quais status de atendimento contam como "a cliente foi de fato atendida" (histórico/produção)
+ * — reaproveitado por clientes-repo.ts (histórico/último atendimento) e financeiro-service.ts
+ * (indicadores por competência). Fica aqui (módulo puro, sem import de `@/lib/db`) para poder
+ * ser importado também por código client-side, ao contrário de clientes-repo.ts. */
+export const STATUS_ATENDIMENTO_REALIZADO = new Set<string>([
+  "finalizadoPago",
+  "finalizadoPendente",
+  "finalizadoParcial",
+  "finalizadoCortesia",
+  "estornado",
+]);
+
+export function somaServicos(servicos: ServicoRealizado[]) {
   return servicos.reduce((total, item) => total + item.valor, 0);
 }
 
@@ -55,81 +74,7 @@ export function saldoPendente(atendimento: Atendimento) {
   return Math.max(valorTotalDevido(atendimento) - atendimento.valorRecebido, 0);
 }
 
-export const mockAtendimentos: Atendimento[] = [
-  {
-    id: "at-1",
-    cliente: "Ana Silva",
-    profissional: "Rosângela",
-    data: "07/14/2026",
-    horarioInicio: "9:00 AM",
-    horarioFim: null,
-    duracaoMin: null,
-    servicos: [{ nomePt: "Manutenção", nomeEn: "Maintenance", valor: 45 }],
-    desconto: 0,
-    gorjeta: 0,
-    valorRecebido: 0,
-    formaPagamento: null,
-    status: "emAndamento",
-    observacoesPt: "Prefere esmalte vermelho.",
-    observacoesEn: "Prefers red polish.",
-    retornoSugeridoDias: 21,
-    proximoAgendamento: null,
-  },
-  {
-    id: "at-2",
-    cliente: "Maria Costa",
-    profissional: "Rosângela",
-    data: "07/14/2026",
-    horarioInicio: "11:00 AM",
-    horarioFim: "12:00 PM",
-    duracaoMin: 60,
-    servicos: [{ nomePt: "Esmaltação em gel", nomeEn: "Gel polish", valor: 40 }],
-    desconto: 0,
-    gorjeta: 10,
-    valorRecebido: 40,
-    formaPagamento: "cartaoCredito",
-    status: "finalizadoPago",
-    observacoesPt: "",
-    observacoesEn: "",
-    retornoSugeridoDias: 14,
-    proximoAgendamento: "07/28/2026 · 11:00 AM",
-  },
-  {
-    id: "at-3",
-    cliente: "Juliana Santos",
-    profissional: "Rosângela",
-    data: "07/13/2026",
-    horarioInicio: "2:00 PM",
-    horarioFim: "4:00 PM",
-    duracaoMin: 120,
-    servicos: [{ nomePt: "Alongamento", nomeEn: "Nail extension", valor: 110 }],
-    desconto: 0,
-    gorjeta: 0,
-    valorRecebido: 65,
-    formaPagamento: "dinheiro",
-    status: "finalizadoParcial",
-    observacoesPt: "Pagamento restante combinado para o próximo atendimento.",
-    observacoesEn: "Remaining payment arranged for the next appointment.",
-    retornoSugeridoDias: 21,
-    proximoAgendamento: null,
-  },
-  {
-    id: "at-4",
-    cliente: "Cliente de teste",
-    profissional: "Rosângela",
-    data: "07/13/2026",
-    horarioInicio: "4:30 PM",
-    horarioFim: "5:30 PM",
-    duracaoMin: 60,
-    servicos: [{ nomePt: "Serviço a definir", nomeEn: "Service to be defined", valor: 0 }],
-    desconto: 0,
-    gorjeta: 0,
-    valorRecebido: 0,
-    formaPagamento: null,
-    status: "finalizadoCortesia",
-    observacoesPt: "Cortesia por atraso no atendimento anterior.",
-    observacoesEn: "Complimentary due to a delay in a previous appointment.",
-    retornoSugeridoDias: null,
-    proximoAgendamento: null,
-  },
-];
+/** Formata o número sequencial do atendimento no padrão ATD-000001. */
+export function formatAtendimentoId(numero: number) {
+  return `ATD-${String(numero).padStart(6, "0")}`;
+}

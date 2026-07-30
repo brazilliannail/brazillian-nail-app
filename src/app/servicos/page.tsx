@@ -2,29 +2,36 @@
 
 import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useServicos } from "@/components/ServicosProvider";
 import { ServicoCard } from "@/components/ServicoCard";
 import { ServicoDetailsPanel } from "@/components/ServicoDetailsPanel";
+import { ServicoFormModal } from "@/components/ServicoFormModal";
 import { SearchIcon, PlusIcon } from "@/components/icons";
-import { mockServicos, type ServicoStatus } from "@/lib/servicos-mock";
+import type { Servico, ServicoStatus } from "@/lib/servicos-mock";
 
 type Filtro = "todos" | "ativos" | "inativos";
+type FormState = { modo: "criar" } | { modo: "editar"; servico: Servico } | null;
 
 export default function ServicosPage() {
   const { t } = useLanguage();
   const s = t.servicos;
+  const { servicos, addServico, updateServico, toggleStatus } = useServicos();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("todas");
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [formState, setFormState] = useState<FormState>(null);
+  const [erroFormulario, setErroFormulario] = useState<string | null>(null);
+  const [erroOperacao, setErroOperacao] = useState<string | null>(null);
 
   const categorias = useMemo(
-    () => Array.from(new Set(mockServicos.map((servico) => servico.categoria))),
-    [],
+    () => Array.from(new Set(servicos.map((servico) => servico.categoria))),
+    [servicos],
   );
 
   const servicosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return mockServicos.filter((servico) => {
+    return servicos.filter((servico) => {
       const statusOk =
         filtro === "todos" ||
         (filtro === "ativos" && servico.status === ("ativo" satisfies ServicoStatus)) ||
@@ -34,10 +41,36 @@ export default function ServicosPage() {
       if (!termo) return true;
       return servico.nome.toLowerCase().includes(termo);
     });
-  }, [busca, categoria, filtro]);
+  }, [busca, categoria, filtro, servicos]);
 
-  const servicoSelecionado = mockServicos.find((servico) => servico.id === selectedId) ?? null;
-  const totalLabel = `${mockServicos.length} ${mockServicos.length === 1 ? s.contagemSingular : s.contagemPlural}`;
+  const servicoSelecionado = servicos.find((servico) => servico.id === selectedId) ?? null;
+  const totalLabel = `${servicos.length} ${servicos.length === 1 ? s.contagemSingular : s.contagemPlural}`;
+
+  async function handleSaveServico(servico: Servico) {
+    try {
+      setErroFormulario(null);
+      if (formState?.modo === "editar") {
+        await updateServico(servico);
+        setSelectedId(servico.id);
+      } else {
+        const { id: _idPlaceholder, ...dados } = servico;
+        const novoId = await addServico(dados);
+        setSelectedId(novoId);
+      }
+      setFormState(null);
+    } catch (error) {
+      setErroFormulario(error instanceof Error ? error.message : "Não foi possível salvar o serviço.");
+    }
+  }
+
+  async function handleToggleStatus(id: string) {
+    try {
+      setErroOperacao(null);
+      await toggleStatus(id);
+    } catch (error) {
+      setErroOperacao(error instanceof Error ? error.message : "Não foi possível atualizar o status do serviço.");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -49,13 +82,19 @@ export default function ServicosPage() {
           </div>
           <button
             type="button"
-            title={t.misc.emConstrucao}
+            onClick={() => setFormState({ modo: "criar" })}
             className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
           >
             <PlusIcon className="h-4 w-4" />
             {s.novoServico}
           </button>
         </div>
+
+        {erroOperacao && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
+            {erroOperacao}
+          </div>
+        )}
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -117,7 +156,12 @@ export default function ServicosPage() {
 
       {servicoSelecionado && (
         <div className="hidden lg:sticky lg:top-20 lg:block lg:w-96 lg:shrink-0">
-          <ServicoDetailsPanel servico={servicoSelecionado} onClose={() => setSelectedId(null)} />
+          <ServicoDetailsPanel
+            servico={servicoSelecionado}
+            onClose={() => setSelectedId(null)}
+            onEdit={() => setFormState({ modo: "editar", servico: servicoSelecionado })}
+            onToggleStatus={() => handleToggleStatus(servicoSelecionado.id)}
+          />
         </div>
       )}
 
@@ -130,9 +174,27 @@ export default function ServicosPage() {
             className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-background p-4 pb-8"
             onClick={(event) => event.stopPropagation()}
           >
-            <ServicoDetailsPanel servico={servicoSelecionado} onClose={() => setSelectedId(null)} />
+            <ServicoDetailsPanel
+              servico={servicoSelecionado}
+              onClose={() => setSelectedId(null)}
+              onEdit={() => setFormState({ modo: "editar", servico: servicoSelecionado })}
+              onToggleStatus={() => handleToggleStatus(servicoSelecionado.id)}
+            />
           </div>
         </div>
+      )}
+
+      {formState && (
+        <ServicoFormModal
+          modo={formState.modo}
+          servico={formState.modo === "editar" ? formState.servico : null}
+          onClose={() => {
+            setErroFormulario(null);
+            setFormState(null);
+          }}
+          onSave={handleSaveServico}
+          erroSalvar={erroFormulario}
+        />
       )}
     </div>
   );

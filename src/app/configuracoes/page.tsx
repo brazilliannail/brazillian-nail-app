@@ -414,8 +414,8 @@ export default function ConfiguracoesPage() {
               }
               className={inputClass}
             >
-              <option value="whatsapp">{t.clientes.preferenciaLabel.whatsapp}</option>
-              <option value="sms">{t.clientes.preferenciaLabel.sms}</option>
+              <option value="whatsapp">{t.clientes.canalLabel.whatsapp}</option>
+              <option value="sms">{t.clientes.canalLabel.sms}</option>
             </select>
           </Field>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
-import { ClockIcon, CheckIcon, PlayIcon, DoubleCheckIcon } from "@/components/icons";
+import { ClockIcon, CheckIcon, PlayIcon, DoubleCheckIcon, CloseIcon, UserXIcon } from "@/components/icons";
 import type { StatusKey } from "@/lib/mock-data";
 
 const STATUS_STYLES: Record<StatusKey, { badge: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -17,9 +17,17 @@ const STATUS_STYLES: Record<StatusKey, { badge: string; icon: React.ComponentTyp
     badge: "bg-status-em-atendimento/10 text-status-em-atendimento ring-status-em-atendimento/30",
     icon: PlayIcon,
   },
-  finalizado: {
-    badge: "bg-status-finalizado/10 text-status-finalizado ring-status-finalizado/30",
+  concluido: {
+    badge: "bg-status-concluido/10 text-status-concluido ring-status-concluido/30",
     icon: DoubleCheckIcon,
+  },
+  cancelado: {
+    badge: "bg-status-cancelado/10 text-status-cancelado ring-status-cancelado/30",
+    icon: CloseIcon,
+  },
+  naoCompareceu: {
+    badge: "bg-status-nao-compareceu/10 text-status-nao-compareceu ring-status-nao-compareceu/30",
+    icon: UserXIcon,
   },
 };
 

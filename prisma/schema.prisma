@@ -1,0 +1,263 @@
+// Schema inicial do Brazillian Nail — 10 tabelas conforme DATABASE_DESIGN.md.
+// Nenhum dado é importado nesta etapa; apenas a estrutura (tabelas, PKs, FKs, índices).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Cliente {
+  id                  String   @id
+  numeroSequencial    Int      @unique @map("numero_sequencial")
+  nome                String
+  nomePreferencia     String?  @map("nome_preferencia")
+  status              String   @default("ativa")
+  observacoesPt       String   @default("") @map("observacoes_pt")
+  observacoesEn       String   @default("") @map("observacoes_en")
+  avisosImportantesPt String   @default("[]") @map("avisos_importantes_pt")
+  avisosImportantesEn String   @default("[]") @map("avisos_importantes_en")
+  reengajamentoStatus       String    @default("nenhum") @map("reengajamento_status")
+  reengajamentoAtualizadoEm DateTime? @map("reengajamento_atualizado_em")
+  reengajamentoAdiadoAte    String?   @map("reengajamento_adiado_ate")
+  reengajamentoObservacao   String?   @map("reengajamento_observacao")
+  criadoEm            DateTime @default(now()) @map("criado_em")
+  atualizadoEm        DateTime @updatedAt @map("atualizado_em")
+
+  contatos     Contato[]
+  agendamentos Agendamento[]
+  atendimentos Atendimento[]
+  mensagensLog MensagemLog[]
+
+  @@index([status])
+  @@index([nome])
+  @@index([reengajamentoStatus])
+  @@map("clientes")
+}
+
+model Contato {
+  id               String   @id
+  clienteId        String   @map("cliente_id")
+  papel            String
+  nomeContato      String   @map("nome_contato")
+  telefone         String
+  relacao          String   @default("propria")
+  idioma           String   @default("pt")
+  canalPreferido   String   @default("whatsapp") @map("canal_preferido")
+  receberLembretes Boolean  @default(true) @map("receber_lembretes")
+  criadoEm         DateTime @default(now()) @map("criado_em")
+
+  cliente      Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  mensagensLog MensagemLog[]
+
+  @@unique([clienteId, papel])
+  @@index([clienteId])
+  @@map("contatos")
+}
+
+model Servico {
+  id                  String  @id
+  nomePt              String  @map("nome_pt")
+  nomeEn              String? @map("nome_en")
+  categoria           String
+  descricaoPt         String  @default("") @map("descricao_pt")
+  descricaoEn         String  @default("") @map("descricao_en")
+  precoPadrao         Float   @map("preco_padrao")
+  precoVariavel       Boolean @default(false) @map("preco_variavel")
+  precoMinimo         Float?  @map("preco_minimo")
+  precoMaximo         Float?  @map("preco_maximo")
+  duracaoPadraoMin    Int     @map("duracao_padrao_min")
+  duracaoMinimaMin    Int?    @map("duracao_minima_min")
+  duracaoMaximaMin    Int?    @map("duracao_maxima_min")
+  retornoSugeridoDias Int?    @map("retorno_sugerido_dias")
+  status              String  @default("ativo")
+  observacoesPt       String  @default("") @map("observacoes_pt")
+  observacoesEn       String  @default("") @map("observacoes_en")
+
+  agendamentos        Agendamento[]
+  atendimentoServicos AtendimentoServico[]
+
+  @@index([status])
+  @@index([categoria])
+  @@map("servicos")
+}
+
+model Agendamento {
+  id            String   @id
+  clienteId     String   @map("cliente_id")
+  servicoId     String?  @map("servico_id")
+  data          String
+  inicioMin     Int      @map("inicio_min")
+  fimMin        Int      @map("fim_min")
+  status        String   @default("aguardando")
+  valorEstimado Float?   @map("valor_estimado")
+  observacoesPt String   @default("") @map("observacoes_pt")
+  observacoesEn String   @default("") @map("observacoes_en")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  cliente             Cliente       @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  servico             Servico?      @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+  atendimentosOrigem  Atendimento[] @relation("AgendamentoOrigem")
+  atendimentosProximo Atendimento[] @relation("AgendamentoProximo")
+  lembrete            Lembrete?
+
+  @@index([data, inicioMin])
+  @@index([clienteId])
+  @@index([status])
+  @@map("agendamentos")
+}
+
+model Atendimento {
+  id                   String   @id
+  clienteId            String   @map("cliente_id")
+  agendamentoId        String?  @map("agendamento_id")
+  profissional         String
+  data                 String
+  horarioInicio        String   @map("horario_inicio")
+  horarioFim           String?  @map("horario_fim")
+  duracaoMin           Int?     @map("duracao_min")
+  desconto             Float    @default(0)
+  status               String   @default("emAndamento")
+  observacoesPt        String   @default("") @map("observacoes_pt")
+  observacoesEn        String   @default("") @map("observacoes_en")
+  retornoSugeridoDias  Int?     @map("retorno_sugerido_dias")
+  proximoAgendamentoId String?  @map("proximo_agendamento_id")
+  criadoEm             DateTime @default(now()) @map("criado_em")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+
+  cliente            Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  agendamento        Agendamento?         @relation("AgendamentoOrigem", fields: [agendamentoId], references: [id], onDelete: SetNull)
+  proximoAgendamento Agendamento?         @relation("AgendamentoProximo", fields: [proximoAgendamentoId], references: [id], onDelete: SetNull)
+  servicos           AtendimentoServico[]
+  pagamentos         Pagamento[]
+
+  @@index([clienteId, data])
+  @@index([data])
+  @@index([status])
+  @@map("atendimentos")
+}
+
+model AtendimentoServico {
+  id            Int     @id @default(autoincrement())
+  atendimentoId String  @map("atendimento_id")
+  servicoId     String? @map("servico_id")
+  nomePt        String  @map("nome_pt")
+  nomeEn        String  @map("nome_en")
+  valor         Float
+
+  atendimento Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+  servico     Servico?    @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+
+  @@index([atendimentoId])
+  @@map("atendimento_servicos")
+}
+
+model Lembrete {
+  id                              String    @id
+  agendamentoId                   String    @unique @map("agendamento_id")
+  statusLembrete                  String    @default("pendente") @map("status_lembrete")
+  consentimentoRegistrado         Boolean   @default(false) @map("consentimento_registrado")
+  mensagemPersonalizada           String?   @map("mensagem_personalizada")
+  mensagemPersonalizadaSecundario String?   @map("mensagem_personalizada_secundario")
+  enviadoEm                       DateTime? @map("enviado_em")
+
+  agendamento  Agendamento   @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  mensagensLog MensagemLog[]
+
+  @@index([statusLembrete])
+  @@map("lembretes")
+}
+
+// Livro-razão financeiro: 1 atendimento pode ter N pagamentos (parcelas, formas de pagamento
+// diferentes, gorjeta separada do serviço, estornos). Nenhuma linha é editada ou apagada depois
+// de criada — correções são sempre um novo lançamento `tipo = 'estorno'` referenciando o original
+// via `estornaPagamentoId`. `natureza` e `tipo` são eixos independentes: `natureza` diz para que é
+// o dinheiro (serviço/gorjeta), `tipo` diz a direção (entrada/estorno) — evita explosão de enums
+// combinados à medida que novas naturezas surgirem no futuro.
+model Pagamento {
+  id                 String   @id
+  atendimentoId      String   @map("atendimento_id")
+  natureza           String
+  tipo               String
+  dataPagamento      String   @map("data_pagamento")
+  valor              Float
+  formaPagamento     String?  @map("forma_pagamento")
+  observacoesPt      String   @default("") @map("observacoes_pt")
+  observacoesEn      String   @default("") @map("observacoes_en")
+  estornaPagamentoId String?  @map("estorna_pagamento_id")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+
+  atendimento      Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+  estornaPagamento Pagamento?  @relation("Estorno", fields: [estornaPagamentoId], references: [id], onDelete: SetNull)
+  estornos         Pagamento[] @relation("Estorno")
+
+  @@index([atendimentoId, natureza])
+  @@index([dataPagamento])
+  @@index([formaPagamento])
+  @@map("pagamentos")
+}
+
+// Tabela singleton (sempre id = 1) — ver CHECK constraint na migration SQL.
+model Configuracao {
+  id                                 Int      @id @default(1)
+  negocioNome                        String   @default("Brazillian Nail") @map("negocio_nome")
+  negocioNomeCurto                   String   @default("Brazillian Nail") @map("negocio_nome_curto")
+  negocioTelefone                    String   @map("negocio_telefone")
+  negocioEmail                       String   @map("negocio_email")
+  negocioEndereco                    String   @map("negocio_endereco")
+  negocioCidade                      String   @map("negocio_cidade")
+  negocioEstado                      String   @map("negocio_estado")
+  negocioZip                         String   @map("negocio_zip")
+  fusoHorario                        String   @default("America/New_York") @map("fuso_horario")
+  moeda                              String   @default("USD ($)")
+  formatoData                        String   @default("MM/DD/YYYY") @map("formato_data")
+  formatoHora                        String   @default("12h (AM/PM)") @map("formato_hora")
+  idiomaPadraoMensagens               String  @default("pt") @map("idioma_padrao_mensagens")
+  permitirAlterarIdiomaPorCliente    Boolean  @default(true) @map("permitir_alterar_idioma_por_cliente")
+  agendaHorarioAbertura              String   @default("9:00 AM") @map("agenda_horario_abertura")
+  agendaHorarioFechamento            String   @default("7:00 PM") @map("agenda_horario_fechamento")
+  agendaDuracaoPadraoMin             Int      @default(60) @map("agenda_duracao_padrao_min")
+  agendaDiasFuncionamento            String   @default("[\"seg\",\"ter\",\"qua\",\"qui\",\"sex\",\"sab\"]") @map("agenda_dias_funcionamento")
+  agendaBloqueioConflito             Boolean  @default(true) @map("agenda_bloqueio_conflito")
+  agendaPermitirEncaixe              Boolean  @default(true) @map("agenda_permitir_encaixe")
+  lembretesAtivarDiaAnterior         Boolean  @default(true) @map("lembretes_ativar_dia_anterior")
+  lembretesHorarioPadraoAviso        String   @default("6:00 PM") @map("lembretes_horario_padrao_aviso")
+  lembretesCanalPreferido            String   @default("whatsapp") @map("lembretes_canal_preferido")
+  lembretesExigirConfirmacaoManual   Boolean  @default(true) @map("lembretes_exigir_confirmacao_manual")
+  lembretesTextoPadraoPt             String   @map("lembretes_texto_padrao_pt")
+  lembretesTextoPadraoEn             String   @map("lembretes_texto_padrao_en")
+  financeiroFormasPagamentoAtivas    String   @map("financeiro_formas_pagamento_ativas")
+  financeiroMostrarGorjetaSeparada   Boolean  @default(true) @map("financeiro_mostrar_gorjeta_separada")
+  financeiroPermitirPagamentoParcial Boolean  @default(true) @map("financeiro_permitir_pagamento_parcial")
+  financeiroMostrarValoresPendentes  Boolean  @default(true) @map("financeiro_mostrar_valores_pendentes")
+  segurancaEmailPrincipal            String   @map("seguranca_email_principal")
+  segurancaSessaoExpiracaoMin        Int      @default(30) @map("seguranca_sessao_expiracao_min")
+  atualizadoEm                       DateTime @default(now()) @map("atualizado_em")
+
+  @@map("configuracoes")
+}
+
+model MensagemLog {
+  id             String    @id
+  clienteId      String    @map("cliente_id")
+  contatoId      String    @map("contato_id")
+  lembreteId     String?   @map("lembrete_id")
+  canal          String
+  idioma         String
+  textoPreparado String    @map("texto_preparado")
+  statusMensagem String    @default("preparada") @map("status_mensagem")
+  preparadoEm    DateTime  @default(now()) @map("preparado_em")
+  confirmadoEm   DateTime? @map("confirmado_em")
+
+  cliente  Cliente   @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  contato  Contato   @relation(fields: [contatoId], references: [id], onDelete: Restrict)
+  lembrete Lembrete? @relation(fields: [lembreteId], references: [id], onDelete: SetNull)
+
+  @@index([clienteId])
+  @@index([statusMensagem])
+  @@index([preparadoEm])
+  @@map("mensagens_log")
+}

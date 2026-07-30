@@ -1,4 +1,10 @@
-export type StatusKey = "aguardando" | "confirmado" | "emAtendimento" | "finalizado";
+export type StatusKey =
+  | "aguardando"
+  | "confirmado"
+  | "emAtendimento"
+  | "concluido"
+  | "cancelado"
+  | "naoCompareceu";
 
 export type AgendaItem = {
   horario: string;
@@ -35,7 +41,7 @@ export const mockAgendaHoje: AgendaItem[] = [
     cliente: "Cliente de teste",
     servicoPt: "Serviço a definir",
     servicoEn: "Service to be defined",
-    status: "finalizado",
+    status: "concluido",
   },
 ];
 
