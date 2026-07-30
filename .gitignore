@@ -48,3 +48,7 @@ next-env.d.ts
 
 # banco de teste isolado (nunca deve ir para o repositório)
 /prisma/test-db/
+
+# backups ad-hoc do banco (dados reais de clientes — nunca versionar; schema.prisma e
+# prisma/migrations/ continuam fora desta regra, propositalmente, e devem ser versionados)
+/prisma/backups/
