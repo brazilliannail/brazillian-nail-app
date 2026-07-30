@@ -40,6 +40,7 @@ model Cliente {
 
 model Contato {
   id               String   @id
+  numeroSequencial Int      @unique @map("numero_sequencial")
   clienteId        String   @map("cliente_id")
   papel            String
   nomeContato      String   @map("nome_contato")
@@ -60,6 +61,7 @@ model Contato {
 
 model Servico {
   id                  String  @id
+  numeroSequencial    Int     @unique @map("numero_sequencial")
   nomePt              String  @map("nome_pt")
   nomeEn              String? @map("nome_en")
   categoria           String
@@ -87,6 +89,7 @@ model Servico {
 
 model Agendamento {
   id            String   @id
+  numeroSequencial Int   @unique @map("numero_sequencial")
   clienteId     String   @map("cliente_id")
   servicoId     String?  @map("servico_id")
   data          String
@@ -112,6 +115,7 @@ model Agendamento {
 
 model Atendimento {
   id                   String   @id
+  numeroSequencial     Int      @unique @map("numero_sequencial")
   clienteId            String   @map("cliente_id")
   agendamentoId        String?  @map("agendamento_id")
   profissional         String
@@ -179,6 +183,7 @@ model Lembrete {
 // combinados à medida que novas naturezas surgirem no futuro.
 model Pagamento {
   id                 String   @id
+  numeroSequencial   Int      @unique @map("numero_sequencial")
   atendimentoId      String   @map("atendimento_id")
   natureza           String
   tipo               String

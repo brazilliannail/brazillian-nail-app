@@ -1,17 +1,16 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapServicoRow } from "@/lib/servicos-repo";
 import type { Servico } from "@/lib/servicos-mock";
 
-async function nextServicoId(): Promise<string> {
-  const rows = await prisma.servico.findMany({ select: { id: true } });
-  let max = 0;
-  for (const row of rows) {
-    const match = /^SRV-(\d+)$/.exec(row.id);
-    if (match) max = Math.max(max, parseInt(match[1], 10));
-  }
-  return `SRV-${String(max + 1).padStart(6, "0")}`;
+/** Próximo id de serviço, a partir de `numero_sequencial` (coluna indexada e única — mesmo
+ * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
+async function nextServicoId(): Promise<{ id: string; numeroSequencial: number }> {
+  const agregado = await prisma.servico.aggregate({ _max: { numeroSequencial: true } });
+  const numeroSequencial = (agregado._max.numeroSequencial ?? 0) + 1;
+  return { id: `SRV-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
 function validarServico(dados: Omit<Servico, "id">) {
@@ -44,11 +43,12 @@ function validarServico(dados: Omit<Servico, "id">) {
 export async function createServicoAction(dados: Omit<Servico, "id">): Promise<Servico> {
   validarServico(dados);
 
-  const id = await nextServicoId();
+  const { id, numeroSequencial } = await nextServicoId();
 
   const row = await prisma.servico.create({
     data: {
       id,
+      numeroSequencial,
       nomePt: dados.nome.trim(),
       nomeEn: dados.nomeEn && dados.nomeEn.trim() !== "" ? dados.nomeEn.trim() : null,
       categoria: dados.categoria.trim(),
@@ -68,6 +68,7 @@ export async function createServicoAction(dados: Omit<Servico, "id">): Promise<S
     },
   });
 
+  revalidatePath("/", "layout");
   return mapServicoRow(row);
 }
 
@@ -101,6 +102,7 @@ export async function updateServicoAction(servico: Servico): Promise<Servico> {
     },
   });
 
+  revalidatePath("/", "layout");
   return mapServicoRow(row);
 }
 
@@ -114,5 +116,6 @@ export async function toggleStatusServicoAction(id: string): Promise<Servico> {
   const novoStatus = existente.status === "ativo" ? "inativo" : "ativo";
   const row = await prisma.servico.update({ where: { id }, data: { status: novoStatus } });
 
+  revalidatePath("/", "layout");
   return mapServicoRow(row);
 }

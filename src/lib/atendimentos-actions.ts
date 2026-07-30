@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapAtendimentoRow } from "@/lib/atendimentos-repo";
 import { mapAgendamentoRow } from "@/lib/agenda-repo";
@@ -13,26 +14,25 @@ import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
 
-async function nextAtendimentoId(): Promise<string> {
-  const rows = await prisma.atendimento.findMany({ select: { id: true } });
-  let max = 0;
-  for (const row of rows) {
-    const match = /^ATD-(\d+)$/.exec(row.id);
-    if (match) max = Math.max(max, parseInt(match[1], 10));
-  }
-  return `ATD-${String(max + 1).padStart(6, "0")}`;
+/** Próximo id de atendimento, a partir de `numero_sequencial` (coluna indexada e única — mesmo
+ * padrão usado por `clientes`), consultado dentro da transação. Substitui a varredura completa da
+ * tabela + regex usada antes: essa abordagem ficava mais lenta a cada atendimento criado. */
+async function nextAtendimentoId(tx: Tx): Promise<{ id: string; numeroSequencial: number }> {
+  const agregado = await tx.atendimento.aggregate({ _max: { numeroSequencial: true } });
+  const numeroSequencial = (agregado._max.numeroSequencial ?? 0) + 1;
+  return { id: `ATD-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
-/** Reserva `quantidade` IDs sequenciais novos no padrão PAG-000001, dentro da transação. */
-async function proximosPagamentoIds(tx: Tx, quantidade: number): Promise<string[]> {
+/** Reserva `quantidade` IDs sequenciais novos no padrão PAG-000001, dentro da transação, a partir
+ * de `numero_sequencial` (mesmo padrão de `nextAtendimentoId` acima). */
+async function proximosPagamentoIds(tx: Tx, quantidade: number): Promise<{ id: string; numeroSequencial: number }[]> {
   if (quantidade === 0) return [];
-  const rows = await tx.pagamento.findMany({ select: { id: true } });
-  let max = 0;
-  for (const row of rows) {
-    const match = /^PAG-(\d+)$/.exec(row.id);
-    if (match) max = Math.max(max, parseInt(match[1], 10));
-  }
-  return Array.from({ length: quantidade }, (_, index) => formatPagamentoId(max + index + 1));
+  const agregado = await tx.pagamento.aggregate({ _max: { numeroSequencial: true } });
+  const base = agregado._max.numeroSequencial ?? 0;
+  return Array.from({ length: quantidade }, (_, index) => {
+    const numeroSequencial = base + index + 1;
+    return { id: formatPagamentoId(numeroSequencial), numeroSequencial };
+  });
 }
 
 /** Quanto de uma entrada específica ainda não foi estornado — usado tanto pelo estorno total do
@@ -114,13 +114,14 @@ async function buscarAtendimentoCompleto(tx: Tx, id: string): Promise<Atendiment
 export async function createAtendimentoAction(dados: Omit<Atendimento, "id">): Promise<Atendimento> {
   validarAtendimento(dados);
 
-  return prisma.$transaction(async (tx) => {
-    const id = await nextAtendimentoId();
+  const resultado = await prisma.$transaction(async (tx) => {
+    const { id, numeroSequencial } = await nextAtendimentoId(tx);
     const dataIso = mmddyyyyToISO(dados.data);
 
     await tx.atendimento.create({
       data: {
         id,
+        numeroSequencial,
         clienteId: dados.clienteId,
         agendamentoId: dados.agendamentoId,
         profissional: dados.profissional.trim(),
@@ -140,6 +141,9 @@ export async function createAtendimentoAction(dados: Omit<Atendimento, "id">): P
 
     return buscarAtendimentoCompleto(tx, id);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /** Nome usado no snapshot quando o agendamento de origem não tem serviço definido no catálogo. */
@@ -173,7 +177,7 @@ export type IniciarAtendimentoResultado = {
 export async function iniciarAtendimentoDoAgendamentoAction(
   agendamentoId: string,
 ): Promise<IniciarAtendimentoResultado> {
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const agendamento = await tx.agendamento.findUnique({ where: { id: agendamentoId } });
     if (!agendamento) {
       throw new Error("Agendamento não encontrado.");
@@ -208,11 +212,12 @@ export async function iniciarAtendimentoDoAgendamentoAction(
       valor: agendamento.valorEstimado ?? servicoCatalogo?.precoPadrao ?? 0,
     };
 
-    const id = await nextAtendimentoId();
+    const { id, numeroSequencial } = await nextAtendimentoId(tx);
 
     await tx.atendimento.create({
       data: {
         id,
+        numeroSequencial,
         clienteId: agendamento.clienteId,
         agendamentoId: agendamento.id,
         profissional: PROFISSIONAL_PADRAO,
@@ -242,6 +247,9 @@ export async function iniciarAtendimentoDoAgendamentoAction(
       criado: true,
     };
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /**
@@ -252,7 +260,7 @@ export async function iniciarAtendimentoDoAgendamentoAction(
 export async function updateAtendimentoAction(atendimento: Atendimento): Promise<Atendimento> {
   validarAtendimento(atendimento);
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id: atendimento.id },
       include: { servicos: true, pagamentos: { select: { id: true } } },
@@ -300,6 +308,9 @@ export async function updateAtendimentoAction(atendimento: Atendimento): Promise
 
     return buscarAtendimentoCompleto(tx, atendimento.id);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /**
@@ -371,7 +382,7 @@ export async function concluirAtendimentoAction(id: string, dados: ConcluirDados
     throw new Error("A gorjeta não pode ser negativa.");
   }
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id },
       include: { servicos: true, pagamentos: { select: { id: true } } },
@@ -397,7 +408,8 @@ export async function concluirAtendimentoAction(id: string, dados: ConcluirDados
     if (lancamentos.length > 0) {
       await tx.pagamento.createMany({
         data: lancamentos.map((lancamento, index) => ({
-          id: ids[index],
+          id: ids[index].id,
+          numeroSequencial: ids[index].numeroSequencial,
           atendimentoId: id,
           natureza: lancamento.natureza,
           tipo: "entrada",
@@ -423,6 +435,9 @@ export async function concluirAtendimentoAction(id: string, dados: ConcluirDados
 
     return { atendimento: mapAtendimentoRow(row), agendamento };
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /**
@@ -432,7 +447,7 @@ export async function concluirAtendimentoAction(id: string, dados: ConcluirDados
  * implícita no status.
  */
 export async function cancelarAtendimentoAction(id: string): Promise<AtendimentoComAgenda> {
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id },
       include: { pagamentos: { select: { id: true } } },
@@ -460,6 +475,9 @@ export async function cancelarAtendimentoAction(id: string): Promise<Atendimento
 
     return { atendimento: mapAtendimentoRow(row), agendamento };
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /**
@@ -469,7 +487,7 @@ export async function cancelarAtendimentoAction(id: string): Promise<Atendimento
  * ou apaga os lançamentos originais.
  */
 export async function estornarAtendimentoAction(id: string): Promise<Atendimento> {
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id },
       include: { pagamentos: true },
@@ -493,7 +511,8 @@ export async function estornarAtendimentoAction(id: string): Promise<Atendimento
     if (pendentesDeEstorno.length > 0) {
       await tx.pagamento.createMany({
         data: pendentesDeEstorno.map((item, index) => ({
-          id: ids[index],
+          id: ids[index].id,
+          numeroSequencial: ids[index].numeroSequencial,
           atendimentoId: id,
           natureza: item.entrada.natureza,
           tipo: "estorno",
@@ -513,6 +532,9 @@ export async function estornarAtendimentoAction(id: string): Promise<Atendimento
 
     return mapAtendimentoRow(row);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 const STATUS_COM_SALDO_ABERTO = new Set<AtendimentoStatus>(["finalizadoPendente", "finalizadoParcial"]);
@@ -551,7 +573,7 @@ export async function registrarPagamentoAdicionalAction(
     throw new Error("Informe ao menos um valor de pagamento ou gorjeta.");
   }
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id: atendimentoId },
       include: { servicos: true, pagamentos: true },
@@ -584,7 +606,8 @@ export async function registrarPagamentoAdicionalAction(
     const ids = await proximosPagamentoIds(tx, lancamentos.length);
     await tx.pagamento.createMany({
       data: lancamentos.map((lancamento, index) => ({
-        id: ids[index],
+        id: ids[index].id,
+        numeroSequencial: ids[index].numeroSequencial,
         atendimentoId,
         natureza: lancamento.natureza,
         tipo: "entrada",
@@ -606,6 +629,9 @@ export async function registrarPagamentoAdicionalAction(
 
     return mapAtendimentoRow(row);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 export type CorrigirLancamentoDados = {
@@ -659,7 +685,7 @@ export async function corrigirLancamentoAction(
     throw new Error("O valor corrigido não pode ser negativo.");
   }
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const original = await tx.pagamento.findUnique({ where: { id: pagamentoId } });
     if (!original) {
       throw new Error("Lançamento não encontrado.");
@@ -699,7 +725,8 @@ export async function corrigirLancamentoAction(
     const ids = await proximosPagamentoIds(tx, 2);
     const lancamentos = [
       {
-        id: ids[0],
+        id: ids[0].id,
+        numeroSequencial: ids[0].numeroSequencial,
         atendimentoId: original.atendimentoId,
         natureza: original.natureza,
         tipo: "estorno" as const,
@@ -711,7 +738,8 @@ export async function corrigirLancamentoAction(
         estornaPagamentoId: original.id,
       },
       {
-        id: ids[1],
+        id: ids[1].id,
+        numeroSequencial: ids[1].numeroSequencial,
         atendimentoId: original.atendimentoId,
         natureza: original.natureza,
         tipo: "entrada" as const,
@@ -753,4 +781,7 @@ export async function corrigirLancamentoAction(
 
     return { atendimento: mapAtendimentoRow(row), novosLancamentos };
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }

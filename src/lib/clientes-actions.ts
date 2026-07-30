@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapClienteRow, includeRelacionamentosCliente } from "@/lib/clientes-repo";
 import { formatClienteId, type Cliente, type Contato } from "@/lib/clientes-mock";
@@ -7,14 +8,12 @@ import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
 
-async function nextContatoId(tx: Tx): Promise<string> {
-  const rows = await tx.contato.findMany({ select: { id: true } });
-  let max = 0;
-  for (const row of rows) {
-    const match = /^CTT-(\d+)$/.exec(row.id);
-    if (match) max = Math.max(max, parseInt(match[1], 10));
-  }
-  return `CTT-${String(max + 1).padStart(6, "0")}`;
+/** Próximo id de contato, a partir de `numero_sequencial` (coluna indexada e única — mesmo
+ * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
+async function nextContatoId(tx: Tx): Promise<{ id: string; numeroSequencial: number }> {
+  const agregado = await tx.contato.aggregate({ _max: { numeroSequencial: true } });
+  const numeroSequencial = (agregado._max.numeroSequencial ?? 0) + 1;
+  return { id: `CTT-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
 function validarContato(contato: Contato | null) {
@@ -48,10 +47,11 @@ async function sincronizarContato(tx: Tx, clienteId: string, papel: "principal" 
       },
     });
   } else {
-    const novoId = await nextContatoId(tx);
+    const { id: novoId, numeroSequencial } = await nextContatoId(tx);
     await tx.contato.create({
       data: {
         id: novoId,
+        numeroSequencial,
         clienteId,
         papel,
         nomeContato: contato.nomeContato,
@@ -79,7 +79,7 @@ export async function createClienteAction(dados: Omit<Cliente, "id">): Promise<C
   validarContato(dados.contatoPrincipal);
   validarContato(dados.contatoSecundario);
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const agregado = await tx.cliente.aggregate({ _max: { numeroSequencial: true } });
     const numeroSequencial = (agregado._max.numeroSequencial ?? 0) + 1;
     const id = formatClienteId(numeroSequencial);
@@ -107,6 +107,9 @@ export async function createClienteAction(dados: Omit<Cliente, "id">): Promise<C
 
     return buscarClienteCompleto(tx, id);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /** Atualiza dados de uma cliente existente e sincroniza seus contatos, dentro de uma transação. */
@@ -118,7 +121,7 @@ export async function updateClienteAction(cliente: Cliente): Promise<Cliente> {
   validarContato(cliente.contatoPrincipal);
   validarContato(cliente.contatoSecundario);
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.cliente.findUnique({ where: { id: cliente.id } });
     if (!existente) {
       throw new Error("Cliente não encontrada.");
@@ -141,11 +144,14 @@ export async function updateClienteAction(cliente: Cliente): Promise<Cliente> {
 
     return buscarClienteCompleto(tx, cliente.id);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }
 
 /** Alterna o status (ativa/inativa) de uma cliente, dentro de uma transação. */
 export async function toggleStatusClienteAction(id: string): Promise<Cliente> {
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.cliente.findUnique({ where: { id } });
     if (!existente) {
       throw new Error("Cliente não encontrada.");
@@ -156,4 +162,7 @@ export async function toggleStatusClienteAction(id: string): Promise<Cliente> {
 
     return buscarClienteCompleto(tx, id);
   });
+
+  revalidatePath("/", "layout");
+  return resultado;
 }

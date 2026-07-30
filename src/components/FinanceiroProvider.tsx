@@ -26,6 +26,18 @@ export function FinanceiroProvider({
 }) {
   const [lancamentosCaixa, setLancamentosCaixa] = useState<LancamentoCaixa[]>(lancamentosCaixaIniciais);
 
+  // lancamentosCaixaIniciais muda quando o layout raiz refaz a consulta ao banco — disparado pelo
+  // router.refresh() do AtendimentosProvider após qualquer ação que mexa no ledger (concluir,
+  // estornar, registrar pagamento adicional, corrigir lançamento). Sem isto, o cache local
+  // (inclusive o que `adicionarLancamentosCaixa` adicionou manualmente) nunca seria substituído
+  // pela verdade do servidor. Ajuste feito durante a própria renderização (não em `useEffect`) —
+  // padrão recomendado pelo React para sincronizar estado com uma prop que mudou.
+  const [prevLancamentosCaixaIniciais, setPrevLancamentosCaixaIniciais] = useState(lancamentosCaixaIniciais);
+  if (lancamentosCaixaIniciais !== prevLancamentosCaixaIniciais) {
+    setPrevLancamentosCaixaIniciais(lancamentosCaixaIniciais);
+    setLancamentosCaixa(lancamentosCaixaIniciais);
+  }
+
   function adicionarLancamentosCaixa(novos: LancamentoCaixa[]) {
     setLancamentosCaixa((prev) => [...prev, ...novos]);
   }

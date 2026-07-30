@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Cliente } from "@/lib/clientes-mock";
 import { createClienteAction, updateClienteAction, toggleStatusClienteAction } from "@/lib/clientes-actions";
 
@@ -27,6 +28,17 @@ export function ClientesProvider({
   clientesIniciais: Cliente[];
 }) {
   const [clientes, setClientes] = useState<Cliente[]>(clientesIniciais);
+  const router = useRouter();
+
+  // clientesIniciais muda quando o layout raiz refaz a consulta ao banco (ver router.refresh()
+  // abaixo, chamado após cada mutação) — sem isto, dados atualizados por outra aba/sessão nunca
+  // apareceriam aqui. Ajuste feito durante a própria renderização (não em `useEffect`) — padrão
+  // recomendado pelo React para sincronizar estado com uma prop que mudou.
+  const [prevClientesIniciais, setPrevClientesIniciais] = useState(clientesIniciais);
+  if (clientesIniciais !== prevClientesIniciais) {
+    setPrevClientesIniciais(clientesIniciais);
+    setClientes(clientesIniciais);
+  }
 
   function getCliente(id: string) {
     return clientes.find((cliente) => cliente.id === id);
@@ -35,17 +47,20 @@ export function ClientesProvider({
   async function addCliente(dados: Omit<Cliente, "id">) {
     const clienteCriado = await createClienteAction(dados);
     setClientes((prev) => [clienteCriado, ...prev]);
+    router.refresh();
     return clienteCriado.id;
   }
 
   async function updateCliente(cliente: Cliente) {
     const clienteAtualizado = await updateClienteAction(cliente);
     setClientes((prev) => prev.map((item) => (item.id === clienteAtualizado.id ? clienteAtualizado : item)));
+    router.refresh();
   }
 
   async function toggleStatus(id: string) {
     const clienteAtualizado = await toggleStatusClienteAction(id);
     setClientes((prev) => prev.map((item) => (item.id === id ? clienteAtualizado : item)));
+    router.refresh();
   }
 
   return (

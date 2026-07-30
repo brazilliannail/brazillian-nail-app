@@ -1,19 +1,18 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapAgendamentoRow } from "@/lib/agenda-repo";
 import { DAY_START_MIN, DAY_END_MIN, type AgendaAppointment } from "@/lib/agenda-mock";
 import type { StatusKey } from "@/lib/mock-data";
 import { mmddyyyyToISO } from "@/lib/date";
 
-async function nextAgendamentoId(): Promise<string> {
-  const rows = await prisma.agendamento.findMany({ select: { id: true } });
-  let max = 0;
-  for (const row of rows) {
-    const match = /^AGD-(\d+)$/.exec(row.id);
-    if (match) max = Math.max(max, parseInt(match[1], 10));
-  }
-  return `AGD-${String(max + 1).padStart(6, "0")}`;
+/** Próximo id de agendamento, a partir de `numero_sequencial` (coluna indexada e única — mesmo
+ * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
+async function nextAgendamentoId(): Promise<{ id: string; numeroSequencial: number }> {
+  const agregado = await prisma.agendamento.aggregate({ _max: { numeroSequencial: true } });
+  const numeroSequencial = (agregado._max.numeroSequencial ?? 0) + 1;
+  return { id: `AGD-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
 function validarHorario(inicioMin: number, fimMin: number) {
@@ -57,11 +56,12 @@ export async function createAgendamentoAction(dados: Omit<AgendaAppointment, "id
     throw new Error("Já existe um agendamento nesse horário.");
   }
 
-  const id = await nextAgendamentoId();
+  const { id, numeroSequencial } = await nextAgendamentoId();
 
   const row = await prisma.agendamento.create({
     data: {
       id,
+      numeroSequencial,
       clienteId: dados.clienteId,
       servicoId: dados.servicoId,
       data: dataIso,
@@ -74,6 +74,7 @@ export async function createAgendamentoAction(dados: Omit<AgendaAppointment, "id
     },
   });
 
+  revalidatePath("/", "layout");
   return mapAgendamentoRow(row);
 }
 
@@ -109,6 +110,7 @@ export async function updateAgendamentoAction(agendamento: AgendaAppointment): P
     },
   });
 
+  revalidatePath("/", "layout");
   return mapAgendamentoRow(row);
 }
 
@@ -120,6 +122,7 @@ export async function updateStatusAgendamentoAction(id: string, status: StatusKe
   }
 
   const row = await prisma.agendamento.update({ where: { id }, data: { status } });
+  revalidatePath("/", "layout");
   return mapAgendamentoRow(row);
 }
 
@@ -148,5 +151,6 @@ export async function reagendarAgendamentoAction(
     data: { data: dataIso, inicioMin: novoInicioMin, fimMin: novoFimMin },
   });
 
+  revalidatePath("/", "layout");
   return mapAgendamentoRow(row);
 }

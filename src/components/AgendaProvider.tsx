@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { AgendaAppointment } from "@/lib/agenda-mock";
 import type { StatusKey } from "@/lib/mock-data";
 import {
@@ -38,6 +39,17 @@ export function AgendaProvider({
   agendamentosIniciais: AgendaAppointment[];
 }) {
   const [agendamentos, setAgendamentos] = useState<AgendaAppointment[]>(agendamentosIniciais);
+  const router = useRouter();
+
+  // agendamentosIniciais muda quando o layout raiz refaz a consulta ao banco (ver router.refresh()
+  // abaixo, chamado após cada mutação) — sem isto, dados atualizados por outra aba/sessão nunca
+  // apareceriam aqui. Ajuste feito durante a própria renderização (não em `useEffect`) — padrão
+  // recomendado pelo React para sincronizar estado com uma prop que mudou.
+  const [prevAgendamentosIniciais, setPrevAgendamentosIniciais] = useState(agendamentosIniciais);
+  if (agendamentosIniciais !== prevAgendamentosIniciais) {
+    setPrevAgendamentosIniciais(agendamentosIniciais);
+    setAgendamentos(agendamentosIniciais);
+  }
 
   function getAgendamento(id: string) {
     return agendamentos.find((item) => item.id === id);
@@ -46,22 +58,26 @@ export function AgendaProvider({
   async function addAgendamento(dados: Omit<AgendaAppointment, "id">) {
     const criado = await createAgendamentoAction(dados);
     setAgendamentos((prev) => [...prev, criado]);
+    router.refresh();
     return criado.id;
   }
 
   async function updateAgendamento(agendamento: AgendaAppointment) {
     const atualizado = await updateAgendamentoAction(agendamento);
     setAgendamentos((prev) => prev.map((item) => (item.id === atualizado.id ? atualizado : item)));
+    router.refresh();
   }
 
   async function updateStatus(id: string, status: StatusKey) {
     const atualizado = await updateStatusAgendamentoAction(id, status);
     setAgendamentos((prev) => prev.map((item) => (item.id === id ? atualizado : item)));
+    router.refresh();
   }
 
   async function reagendar(id: string, novaData: string, novoInicioMin: number, novoFimMin: number) {
     const atualizado = await reagendarAgendamentoAction(id, novaData, novoInicioMin, novoFimMin);
     setAgendamentos((prev) => prev.map((item) => (item.id === id ? atualizado : item)));
+    router.refresh();
   }
 
   function aplicarAgendamentoPersistido(agendamento: AgendaAppointment) {

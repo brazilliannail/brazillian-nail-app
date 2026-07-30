@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Atendimento, FormaPagamento, AtendimentoStatus } from "@/lib/atendimentos-mock";
 import { useAgenda } from "@/components/AgendaProvider";
 import {
@@ -58,6 +59,19 @@ export function AtendimentosProvider({
   atendimentosIniciais: Atendimento[];
 }) {
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>(atendimentosIniciais);
+  const router = useRouter();
+
+  // atendimentosIniciais muda quando o layout raiz refaz a consulta ao banco (ver router.refresh()
+  // abaixo, chamado após cada mutação). Sem isto, o `useState` acima só usaria o valor inicial do
+  // primeiro mount — qualquer dado atualizado por outra aba/sessão nunca apareceria aqui. Ajuste
+  // feito durante a própria renderização (não em `useEffect`) — padrão recomendado pelo React para
+  // sincronizar estado com uma prop que mudou, sem disparar uma renderização em cascata.
+  const [prevAtendimentosIniciais, setPrevAtendimentosIniciais] = useState(atendimentosIniciais);
+  if (atendimentosIniciais !== prevAtendimentosIniciais) {
+    setPrevAtendimentosIniciais(atendimentosIniciais);
+    setAtendimentos(atendimentosIniciais);
+  }
+
   // AtendimentosProvider fica aninhado dentro de AgendaProvider (ver layout.tsx), então pode
   // refletir localmente o agendamento que as Server Actions já sincronizaram no banco.
   const { aplicarAgendamentoPersistido } = useAgenda();
@@ -69,24 +83,28 @@ export function AtendimentosProvider({
   async function addAtendimento(dados: Omit<Atendimento, "id">) {
     const criado = await createAtendimentoAction(dados);
     setAtendimentos((prev) => [criado, ...prev]);
+    router.refresh();
     return criado.id;
   }
 
   async function updateAtendimento(atendimento: Atendimento) {
     const atualizado = await updateAtendimentoAction(atendimento);
     setAtendimentos((prev) => prev.map((item) => (item.id === atualizado.id ? atualizado : item)));
+    router.refresh();
   }
 
   async function concluirAtendimento(id: string, dados: ConcluirDados) {
     const { atendimento, agendamento } = await concluirAtendimentoAction(id, dados);
     setAtendimentos((prev) => prev.map((item) => (item.id === id ? atendimento : item)));
     if (agendamento) aplicarAgendamentoPersistido(agendamento);
+    router.refresh();
   }
 
   async function cancelarAtendimento(id: string) {
     const { atendimento, agendamento } = await cancelarAtendimentoAction(id);
     setAtendimentos((prev) => prev.map((item) => (item.id === id ? atendimento : item)));
     if (agendamento) aplicarAgendamentoPersistido(agendamento);
+    router.refresh();
   }
 
   async function iniciarAtendimentoDoAgendamento(agendamentoId: string) {
@@ -97,22 +115,26 @@ export function AtendimentosProvider({
         : [atendimento, ...prev],
     );
     aplicarAgendamentoPersistido(agendamento);
+    router.refresh();
     return { id: atendimento.id, criado };
   }
 
   async function estornarAtendimento(id: string) {
     const atualizado = await estornarAtendimentoAction(id);
     setAtendimentos((prev) => prev.map((item) => (item.id === id ? atualizado : item)));
+    router.refresh();
   }
 
   async function registrarPagamentoAdicional(id: string, dados: RegistrarPagamentoAdicionalDados) {
     const atualizado = await registrarPagamentoAdicionalAction(id, dados);
     setAtendimentos((prev) => prev.map((item) => (item.id === id ? atualizado : item)));
+    router.refresh();
   }
 
   async function corrigirLancamento(pagamentoId: string, dados: CorrigirLancamentoDados) {
     const resultado = await corrigirLancamentoAction(pagamentoId, dados);
     setAtendimentos((prev) => prev.map((item) => (item.id === resultado.atendimento.id ? resultado.atendimento : item)));
+    router.refresh();
     return resultado;
   }
 
