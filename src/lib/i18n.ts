@@ -916,7 +916,7 @@ export const dictionary = {
         descartar: "Descartar alterações",
         naoSalvo: "Você tem alterações não salvas.",
         salvo: "Nenhuma alteração pendente.",
-        confirmacaoSalvar: "Pré-visualização atualizada — nenhum dado real foi salvo.",
+        confirmacaoSalvar: "Configurações salvas com sucesso.",
       },
     },
     misc: {
@@ -1841,7 +1841,7 @@ export const dictionary = {
         descartar: "Discard changes",
         naoSalvo: "You have unsaved changes.",
         salvo: "No pending changes.",
-        confirmacaoSalvar: "Preview updated — no real data was saved.",
+        confirmacaoSalvar: "Settings saved successfully.",
       },
     },
     misc: {

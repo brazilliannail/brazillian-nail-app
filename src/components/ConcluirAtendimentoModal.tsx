@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon } from "@/components/icons";
 import type { Atendimento, AtendimentoStatus, FormaPagamento } from "@/lib/atendimentos-mock";
 import { valorTotalDevido } from "@/lib/atendimentos-mock";
 import { buildTimeBoundaries } from "@/lib/agenda-mock";
 import { formatMinutesAsTime, parseTimeToMinutes } from "@/lib/date";
+import { FORMAS_PAGAMENTO } from "@/lib/configuracoes-mock";
 
 type StatusFinal = Extract<
   AtendimentoStatus,
@@ -14,17 +16,6 @@ type StatusFinal = Extract<
 >;
 
 const STATUS_FINAIS: StatusFinal[] = ["finalizadoPago", "finalizadoParcial", "finalizadoPendente", "finalizadoCortesia"];
-
-const FORMAS_PAGAMENTO: FormaPagamento[] = [
-  "dinheiro",
-  "cartaoCredito",
-  "cartaoDebito",
-  "zelle",
-  "venmo",
-  "cashApp",
-  "cheque",
-  "outra",
-];
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/40";
@@ -53,6 +44,12 @@ type ConcluirAtendimentoModalProps = {
 export function ConcluirAtendimentoModal({ atendimento, onClose, onConcluir, erroSalvar }: ConcluirAtendimentoModalProps) {
   const { t } = useLanguage();
   const m = t.atendimentos.concluirModal;
+  const { configuracoes } = useConfiguracoes();
+
+  const formasAtivas = configuracoes.financeiro.formasPagamentoAtivas;
+  const formasDisponiveis = FORMAS_PAGAMENTO.filter(
+    (forma) => formasAtivas[forma] || forma === atendimento.formaPagamento,
+  );
 
   const horarios = buildTimeBoundaries();
   const inicioMin = parseTimeToMinutes(atendimento.horarioInicio);
@@ -148,7 +145,7 @@ export function ConcluirAtendimentoModal({ atendimento, onClose, onConcluir, err
           <span className="text-sm font-medium text-foreground/70">{m.formaPagamento}</span>
           <select value={formaPagamento} onChange={(event) => setFormaPagamento(event.target.value)} className={inputClass}>
             <option value="">{m.formaPagamentoNenhuma}</option>
-            {FORMAS_PAGAMENTO.map((forma) => (
+            {formasDisponiveis.map((forma) => (
               <option key={forma} value={forma}>
                 {t.atendimentos.formaPagamentoLabel[forma]}
               </option>

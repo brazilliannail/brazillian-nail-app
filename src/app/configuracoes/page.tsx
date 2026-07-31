@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Toggle } from "@/components/Toggle";
 import {
@@ -15,7 +16,6 @@ import {
   DatabaseIcon,
 } from "@/components/icons";
 import {
-  createConfiguracoesIniciais,
   FUSOS_HORARIOS,
   MOEDAS,
   FORMATOS_DATA,
@@ -77,10 +77,22 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 export default function ConfiguracoesPage() {
   const { locale, toggleLocale, t } = useLanguage();
   const c = t.configuracoes;
+  const { configuracoes, salvarConfiguracoes } = useConfiguracoes();
 
-  const [state, setState] = useState<ConfiguracoesState>(createConfiguracoesIniciais);
-  const [baseline, setBaseline] = useState<ConfiguracoesState>(createConfiguracoesIniciais);
+  const [state, setState] = useState<ConfiguracoesState>(configuracoes);
+  const [baseline, setBaseline] = useState<ConfiguracoesState>(configuracoes);
   const [savedMessageVisible, setSavedMessageVisible] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+
+  // configuracoes muda quando o layout raiz refaz a consulta ao banco (após salvar em outra aba,
+  // por exemplo) — mesmo padrão de sincronização usado em ServicosProvider/ClientesProvider.
+  const [prevConfiguracoes, setPrevConfiguracoes] = useState(configuracoes);
+  if (configuracoes !== prevConfiguracoes) {
+    setPrevConfiguracoes(configuracoes);
+    setState(configuracoes);
+    setBaseline(configuracoes);
+  }
 
   const dirty = JSON.stringify(state) !== JSON.stringify(baseline);
 
@@ -111,14 +123,24 @@ export default function ConfiguracoesPage() {
     }));
   }
 
-  function handleSalvar() {
-    setBaseline(state);
-    setSavedMessageVisible(true);
-    window.setTimeout(() => setSavedMessageVisible(false), 2500);
+  async function handleSalvar() {
+    setSalvando(true);
+    setErroSalvar(null);
+    try {
+      await salvarConfiguracoes(state);
+      setBaseline(state);
+      setSavedMessageVisible(true);
+      window.setTimeout(() => setSavedMessageVisible(false), 2500);
+    } catch (error) {
+      setErroSalvar(error instanceof Error ? error.message : "Não foi possível salvar as configurações.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   function handleDescartar() {
     setState(baseline);
+    setErroSalvar(null);
     setSavedMessageVisible(false);
   }
 
@@ -127,7 +149,6 @@ export default function ConfiguracoesPage() {
       <div>
         <h1 className="text-lg font-semibold text-foreground">{c.titulo}</h1>
         <p className="text-sm text-foreground/60">{c.subtitulo}</p>
-        <p className="mt-2 text-xs text-foreground/50">{t.misc.dadosFicticios}</p>
       </div>
 
       <SettingsCard icon={BuildingIcon} title={c.negocio.titulo} description={c.negocio.descricao}>
@@ -547,7 +568,7 @@ export default function ConfiguracoesPage() {
           <button
             type="button"
             onClick={handleDescartar}
-            disabled={!dirty}
+            disabled={!dirty || salvando}
             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border px-5 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {c.acoes.descartar}
@@ -555,13 +576,19 @@ export default function ConfiguracoesPage() {
           <button
             type="button"
             onClick={handleSalvar}
-            disabled={!dirty}
+            disabled={!dirty || salvando}
             className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {c.acoes.salvar}
           </button>
         </div>
       </div>
+
+      {erroSalvar && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
+          {erroSalvar}
+        </p>
+      )}
 
       {savedMessageVisible && (
         <p className="rounded-xl bg-brand/10 px-4 py-2.5 text-sm font-medium text-brand">{c.acoes.confirmacaoSalvar}</p>

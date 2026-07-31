@@ -2,21 +2,12 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon } from "@/components/icons";
 import type { FormaPagamento } from "@/lib/atendimentos-mock";
 import type { CorrigirLancamentoDados } from "@/lib/atendimentos-actions";
 import type { AtendimentoFinanceiro, LancamentosCorrigiveis } from "@/lib/financeiro-service";
-
-const FORMAS_PAGAMENTO: FormaPagamento[] = [
-  "dinheiro",
-  "cartaoCredito",
-  "cartaoDebito",
-  "zelle",
-  "venmo",
-  "cashApp",
-  "cheque",
-  "outra",
-];
+import { FORMAS_PAGAMENTO } from "@/lib/configuracoes-mock";
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/40";
@@ -46,10 +37,13 @@ export function CorrigirPagamentoModal({ pagamento, lancamentos, onClose, onConf
   const { locale, t } = useLanguage();
   const f = t.financeiro;
   const m = f.corrigirPagamentoModal;
+  const { configuracoes } = useConfiguracoes();
 
   const servico = locale === "pt" ? pagamento.servicoPt : pagamento.servicoEn;
 
   const formaAtual = lancamentos.servico?.formaPagamento ?? lancamentos.gorjeta?.formaPagamento ?? "";
+  const formasAtivas = configuracoes.financeiro.formasPagamentoAtivas;
+  const formasDisponiveis = FORMAS_PAGAMENTO.filter((forma) => formasAtivas[forma] || forma === formaAtual);
   const observacoesPtAtual = lancamentos.servico?.observacoesPt ?? lancamentos.gorjeta?.observacoesPt ?? "";
   const observacoesEnAtual = lancamentos.servico?.observacoesEn ?? lancamentos.gorjeta?.observacoesEn ?? "";
 
@@ -214,7 +208,7 @@ export function CorrigirPagamentoModal({ pagamento, lancamentos, onClose, onConf
                 className={inputClass}
               >
                 <option value="">{m.formaPagamentoPlaceholder}</option>
-                {FORMAS_PAGAMENTO.map((forma) => (
+                {formasDisponiveis.map((forma) => (
                   <option key={forma} value={forma}>
                     {f.formaPagamentoLabel[forma]}
                   </option>

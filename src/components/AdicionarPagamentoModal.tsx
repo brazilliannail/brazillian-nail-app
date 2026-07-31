@@ -2,22 +2,13 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon } from "@/components/icons";
 import type { FormaPagamento } from "@/lib/atendimentos-mock";
 import type { RegistrarPagamentoAdicionalDados } from "@/lib/atendimentos-actions";
 import type { AtendimentoFinanceiro } from "@/lib/financeiro-service";
 import { formatDateISO, isoToMMDDYYYY, mmddyyyyToISO } from "@/lib/date";
-
-const FORMAS_PAGAMENTO: FormaPagamento[] = [
-  "dinheiro",
-  "cartaoCredito",
-  "cartaoDebito",
-  "zelle",
-  "venmo",
-  "cashApp",
-  "cheque",
-  "outra",
-];
+import { FORMAS_PAGAMENTO } from "@/lib/configuracoes-mock";
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/40";
@@ -39,6 +30,10 @@ export function AdicionarPagamentoModal({ pagamento, onClose, onConfirmar, erroS
   const { locale, t } = useLanguage();
   const f = t.financeiro;
   const m = f.registrarPagamentoModal;
+  const { configuracoes } = useConfiguracoes();
+
+  const formasAtivas = configuracoes.financeiro.formasPagamentoAtivas;
+  const formasDisponiveis = FORMAS_PAGAMENTO.filter((forma) => formasAtivas[forma]);
 
   const servico = locale === "pt" ? pagamento.servicoPt : pagamento.servicoEn;
   const dataAtendimentoIso = mmddyyyyToISO(pagamento.dataAtendimento);
@@ -177,7 +172,7 @@ export function AdicionarPagamentoModal({ pagamento, onClose, onConfirmar, erroS
                 className={inputClass}
               >
                 <option value="">{m.formaPagamentoPlaceholder}</option>
-                {FORMAS_PAGAMENTO.map((forma) => (
+                {formasDisponiveis.map((forma) => (
                   <option key={forma} value={forma}>
                     {f.formaPagamentoLabel[forma]}
                   </option>

@@ -8,12 +8,14 @@ import { ServicosProvider } from "@/components/ServicosProvider";
 import { AgendaProvider } from "@/components/AgendaProvider";
 import { AtendimentosProvider } from "@/components/AtendimentosProvider";
 import { FinanceiroProvider } from "@/components/FinanceiroProvider";
+import { ConfiguracoesProvider } from "@/components/ConfiguracoesProvider";
 import { AppShell } from "@/components/AppShell";
 import { getClientes } from "@/lib/clientes-repo";
 import { getServicos } from "@/lib/servicos-repo";
 import { getAgendamentos } from "@/lib/agenda-repo";
 import { getAtendimentos } from "@/lib/atendimentos-repo";
 import { getLancamentosCaixa } from "@/lib/financeiro-repo";
+import { getConfiguracoes } from "@/lib/configuracoes-repo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,12 +41,20 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [clientesIniciais, servicosIniciais, agendamentosIniciais, atendimentosIniciais, lancamentosCaixaIniciais] = await Promise.all([
+  const [
+    clientesIniciais,
+    servicosIniciais,
+    agendamentosIniciais,
+    atendimentosIniciais,
+    lancamentosCaixaIniciais,
+    configuracoesIniciais,
+  ] = await Promise.all([
     getClientes(),
     getServicos(),
     getAgendamentos(),
     getAtendimentos(),
     getLancamentosCaixa(),
+    getConfiguracoes(),
   ]);
 
   return (
@@ -59,9 +69,11 @@ export default async function RootLayout({
               <AgendaProvider agendamentosIniciais={agendamentosIniciais}>
                 <AtendimentosProvider atendimentosIniciais={atendimentosIniciais}>
                   <FinanceiroProvider lancamentosCaixaIniciais={lancamentosCaixaIniciais}>
-                    <FinancialVisibilityProvider>
-                      <AppShell>{children}</AppShell>
-                    </FinancialVisibilityProvider>
+                    <ConfiguracoesProvider configuracoesIniciais={configuracoesIniciais}>
+                      <FinancialVisibilityProvider>
+                        <AppShell>{children}</AppShell>
+                      </FinancialVisibilityProvider>
+                    </ConfiguracoesProvider>
                   </FinanceiroProvider>
                 </AtendimentosProvider>
               </AgendaProvider>
