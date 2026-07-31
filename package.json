@@ -9,7 +9,9 @@
     "lint": "eslint",
     "dev:test": "node scripts/with-test-db.mjs npx next dev",
     "db:test:setup": "node scripts/with-test-db.mjs npx prisma migrate deploy",
-    "db:test:reset": "node scripts/test-db-reset.mjs"
+    "db:test:reset": "node scripts/test-db-reset.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.9.0",
@@ -27,6 +29,7 @@
     "eslint-config-next": "16.2.10",
     "prisma": "^7.9.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
