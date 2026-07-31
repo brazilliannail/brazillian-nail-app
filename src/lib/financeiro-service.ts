@@ -352,9 +352,9 @@ export function listarPendencias(atendimentos: Atendimento[], clientesPorId: Map
 
 /**
  * Saldo em aberto global (qualquer atendimento, qualquer data) — mesma regra usada por
- * `listarPendencias`/`Cliente.valorPendente` (clientes-repo.ts), reaproveitada aqui apenas para
- * eventuais somatórios; hoje não alimenta nenhum card (ver backlog "Saldo em Aberto (Global)" em
- * DASHBOARD_DESIGN.md §9 — fora de escopo desta fase).
+ * `listarPendencias`/`Cliente.valorPendente` (clientes-repo.ts). Alimenta o card "Valores
+ * pendentes" da Home (`src/app/page.tsx`); o Dashboard Financeiro em si ainda não tem um card
+ * equivalente (ver backlog "Saldo em Aberto (Global)" em DASHBOARD_DESIGN.md §9).
  */
 export function calcularSaldoAbertoGlobal(atendimentos: Atendimento[]): number {
   return round2(
