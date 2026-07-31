@@ -3,24 +3,26 @@
 import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
+import { useLembretes } from "@/components/LembretesProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { LembreteCard } from "@/components/LembreteCard";
 import { LembreteDetailsPanel } from "@/components/LembreteDetailsPanel";
 import { ConfigurarHorarioModal } from "@/components/ConfigurarHorarioModal";
 import { StatCard } from "@/components/StatCard";
 import { ClockIcon, CheckIcon, DoubleCheckIcon, UsersIcon, AlertIcon, PhoneIcon } from "@/components/icons";
 import { addDays, formatDateMMDDYYYY } from "@/lib/date";
-import { mockLembretes, type Lembrete, type LembreteStatus } from "@/lib/lembretes-mock";
 
 export default function LembretesPage() {
   const { t } = useLanguage();
   const { getCliente } = useClientes();
+  const { lembretes, updateStatus, updateMensagem, updateMensagemSecundario } = useLembretes();
+  const { configuracoes, salvarConfiguracoes } = useConfiguracoes();
   const l = t.lembretes;
-  const [lembretes, setLembretes] = useState<Lembrete[]>(mockLembretes);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [horarioAviso, setHorarioAviso] = useState("8:00 AM");
   const [configurarAberto, setConfigurarAberto] = useState(false);
 
   const dataAmanha = useMemo(() => formatDateMMDDYYYY(addDays(new Date(), 1)), []);
+  const horarioAviso = configuracoes.lembretes.horarioPadraoAviso;
 
   const resumo = useMemo(
     () => ({
@@ -34,23 +36,15 @@ export default function LembretesPage() {
     [lembretes, getCliente],
   );
 
-  function updateStatus(id: string, status: LembreteStatus) {
-    setLembretes((current) => current.map((item) => (item.id === id ? { ...item, statusLembrete: status } : item)));
-  }
-
-  function updateMensagem(id: string, mensagem: string) {
-    setLembretes((current) =>
-      current.map((item) => (item.id === id ? { ...item, mensagemPersonalizada: mensagem } : item)),
-    );
-  }
-
-  function updateMensagemSecundario(id: string, mensagem: string) {
-    setLembretes((current) =>
-      current.map((item) => (item.id === id ? { ...item, mensagemPersonalizadaSecundario: mensagem } : item)),
-    );
-  }
-
   const lembreteSelecionado = lembretes.find((item) => item.id === selectedId) ?? null;
+
+  async function salvarHorarioAviso(novoHorario: string) {
+    await salvarConfiguracoes({
+      ...configuracoes,
+      lembretes: { ...configuracoes.lembretes, horarioPadraoAviso: novoHorario },
+    });
+    setConfigurarAberto(false);
+  }
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -136,10 +130,7 @@ export default function LembretesPage() {
       {configurarAberto && (
         <ConfigurarHorarioModal
           horarioAtual={horarioAviso}
-          onSave={(novoHorario) => {
-            setHorarioAviso(novoHorario);
-            setConfigurarAberto(false);
-          }}
+          onSave={salvarHorarioAviso}
           onClose={() => setConfigurarAberto(false)}
         />
       )}

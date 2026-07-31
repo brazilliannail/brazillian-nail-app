@@ -161,6 +161,7 @@ model AtendimentoServico {
 
 model Lembrete {
   id                              String    @id
+  numeroSequencial                Int       @unique @map("numero_sequencial")
   agendamentoId                   String    @unique @map("agendamento_id")
   statusLembrete                  String    @default("pendente") @map("status_lembrete")
   consentimentoRegistrado         Boolean   @default(false) @map("consentimento_registrado")
@@ -247,6 +248,7 @@ model Configuracao {
 
 model MensagemLog {
   id             String    @id
+  numeroSequencial Int     @unique @map("numero_sequencial")
   clienteId      String    @map("cliente_id")
   contatoId      String    @map("contato_id")
   lembreteId     String?   @map("lembrete_id")

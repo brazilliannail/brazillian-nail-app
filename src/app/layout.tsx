@@ -9,6 +9,7 @@ import { AgendaProvider } from "@/components/AgendaProvider";
 import { AtendimentosProvider } from "@/components/AtendimentosProvider";
 import { FinanceiroProvider } from "@/components/FinanceiroProvider";
 import { ConfiguracoesProvider } from "@/components/ConfiguracoesProvider";
+import { LembretesProvider } from "@/components/LembretesProvider";
 import { AppShell } from "@/components/AppShell";
 import { getClientes } from "@/lib/clientes-repo";
 import { getServicos } from "@/lib/servicos-repo";
@@ -16,6 +17,7 @@ import { getAgendamentos } from "@/lib/agenda-repo";
 import { getAtendimentos } from "@/lib/atendimentos-repo";
 import { getLancamentosCaixa } from "@/lib/financeiro-repo";
 import { getConfiguracoes } from "@/lib/configuracoes-repo";
+import { getLembretesAmanha } from "@/lib/lembretes-repo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,20 +43,25 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // configuracoesIniciais precisa vir antes de getLembretesAmanha: a geração automática do dia
+  // respeita `lembretes.ativarLembretesDiaAnterior`, então as duas consultas não podem ser
+  // paralelizadas no mesmo Promise.all.
+  const configuracoesIniciais = await getConfiguracoes();
+
   const [
     clientesIniciais,
     servicosIniciais,
     agendamentosIniciais,
     atendimentosIniciais,
     lancamentosCaixaIniciais,
-    configuracoesIniciais,
+    lembretesIniciais,
   ] = await Promise.all([
     getClientes(),
     getServicos(),
     getAgendamentos(),
     getAtendimentos(),
     getLancamentosCaixa(),
-    getConfiguracoes(),
+    getLembretesAmanha(configuracoesIniciais.lembretes.ativarLembretesDiaAnterior),
   ]);
 
   return (
@@ -70,9 +77,11 @@ export default async function RootLayout({
                 <AtendimentosProvider atendimentosIniciais={atendimentosIniciais}>
                   <FinanceiroProvider lancamentosCaixaIniciais={lancamentosCaixaIniciais}>
                     <ConfiguracoesProvider configuracoesIniciais={configuracoesIniciais}>
-                      <FinancialVisibilityProvider>
-                        <AppShell>{children}</AppShell>
-                      </FinancialVisibilityProvider>
+                      <LembretesProvider lembretesIniciais={lembretesIniciais}>
+                        <FinancialVisibilityProvider>
+                          <AppShell>{children}</AppShell>
+                        </FinancialVisibilityProvider>
+                      </LembretesProvider>
                     </ConfiguracoesProvider>
                   </FinanceiroProvider>
                 </AtendimentosProvider>

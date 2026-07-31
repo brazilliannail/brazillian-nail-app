@@ -10,6 +10,10 @@ type ContatoAcoesMensagemProps = {
   labelWhatsapp: string;
   labelSms: string;
   avisoLembretesDesativados: string;
+  /** Chamado ao clicar em abrir WhatsApp/SMS, antes da navegação — usado para auditar em
+   * `mensagens_log` (ver `registrarMensagemPreparada` em LembretesProvider). Opcional: quando
+   * omitido (ex.: mensagem avulsa em Clientes), nenhum registro é gravado. */
+  onAbrirCanal?: (canal: "whatsapp" | "sms") => void;
 };
 
 const botaoBase =
@@ -29,6 +33,7 @@ export function ContatoAcoesMensagem({
   labelWhatsapp,
   labelSms,
   avisoLembretesDesativados,
+  onAbrirCanal,
 }: ContatoAcoesMensagemProps) {
   const mostrarWhatsapp = contato.canalPreferido === "whatsapp" || contato.canalPreferido === "ambos";
   const mostrarSms = contato.canalPreferido === "sms" || contato.canalPreferido === "ambos";
@@ -48,6 +53,7 @@ export function ContatoAcoesMensagem({
               href={whatsappHref(contato.telefone, mensagem)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => onAbrirCanal?.("whatsapp")}
               className={`${mostrarSms ? "" : "col-span-2 "}${botaoWhatsapp}`}
             >
               <ChatIcon className="h-4 w-4" />
@@ -62,7 +68,7 @@ export function ContatoAcoesMensagem({
               {labelSms}
             </button>
           ) : (
-            <a href={smsHref(contato.telefone, mensagem)} className={botaoBase}>
+            <a href={smsHref(contato.telefone, mensagem)} onClick={() => onAbrirCanal?.("sms")} className={botaoBase}>
               <MessageIcon className="h-4 w-4" />
               {labelSms}
             </a>

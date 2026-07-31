@@ -38,6 +38,36 @@ export function buildMensagemContato(idioma: IdiomaContato, dados: DadosMensagem
   return `${textoPt(dados)}\n\n${textoEn(dados)}`;
 }
 
+export type PlaceholdersTemplateLembrete = {
+  nome: string;
+  data: string;
+  horario: string;
+  servico: string;
+  negocio: string;
+  endereco: string;
+};
+
+/** Substitui os placeholders `{nome}`, `{data}`, etc. de um template salvo em `configuracoes`
+ * (`lembretes_texto_padrao_pt/en`, ver DATABASE_DESIGN.md §4.9 e §11.1). */
+export function renderTemplateLembrete(template: string, placeholders: PlaceholdersTemplateLembrete) {
+  return template.replace(/\{(nome|data|horario|servico|negocio|endereco)\}/g, (_, chave: keyof PlaceholdersTemplateLembrete) => placeholders[chave]);
+}
+
+/**
+ * Monta a mensagem de lembrete a partir dos templates configuráveis (Configurações → Lembretes),
+ * no idioma do contato — "bilingue" concatena os dois textos, um abaixo do outro.
+ */
+export function buildMensagemLembreteConfiguravel(
+  idioma: IdiomaContato,
+  templatePt: string,
+  templateEn: string,
+  placeholders: PlaceholdersTemplateLembrete,
+) {
+  if (idioma === "pt") return renderTemplateLembrete(templatePt, placeholders);
+  if (idioma === "en") return renderTemplateLembrete(templateEn, placeholders);
+  return `${renderTemplateLembrete(templatePt, placeholders)}\n\n${renderTemplateLembrete(templateEn, placeholders)}`;
+}
+
 function apenasDigitos(telefone: string) {
   return telefone.replace(/\D/g, "");
 }

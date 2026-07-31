@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
+import { useLembretes } from "@/components/LembretesProvider";
 import { ContatoAcoesMensagem } from "@/components/ContatoAcoesMensagem";
 import {
   CloseIcon,
@@ -16,7 +18,7 @@ import {
   CalendarIcon,
   UsersIcon,
 } from "@/components/icons";
-import { buildMensagemLembrete, enderecoBrazillianNail, type Lembrete, type LembreteStatus } from "@/lib/lembretes-mock";
+import { buildMensagemLembrete, enderecoDoNegocio, type Lembrete, type LembreteStatus } from "@/lib/lembretes-mock";
 
 type LembreteDetailsPanelProps = {
   lembrete: Lembrete;
@@ -40,6 +42,8 @@ export function LembreteDetailsPanel({
 }: LembreteDetailsPanelProps) {
   const { t } = useLanguage();
   const { getCliente } = useClientes();
+  const { configuracoes } = useConfiguracoes();
+  const { registrarMensagemPreparada } = useLembretes();
   const c = t.clientes;
   const l = t.lembretes;
   const p = l.painel;
@@ -53,9 +57,11 @@ export function LembreteDetailsPanel({
 
   const idiomaEfetivo = idioma === "bilingue" ? "pt" : idioma;
   const servico = idiomaEfetivo === "pt" ? lembrete.servicoPt : lembrete.servicoEn;
-  const mensagem = lembrete.mensagemPersonalizada ?? buildMensagemLembrete(lembrete, cliente, contato, dataAmanha);
+  const mensagem =
+    lembrete.mensagemPersonalizada ?? buildMensagemLembrete(lembrete, cliente, contato, dataAmanha, configuracoes);
   const mensagemSecundario = contatoSecundario
-    ? lembrete.mensagemPersonalizadaSecundario ?? buildMensagemLembrete(lembrete, cliente, contatoSecundario, dataAmanha)
+    ? (lembrete.mensagemPersonalizadaSecundario ??
+      buildMensagemLembrete(lembrete, cliente, contatoSecundario, dataAmanha, configuracoes))
     : "";
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
@@ -144,7 +150,7 @@ export function LembreteDetailsPanel({
               <MapPinIcon className="h-4 w-4" />
               {p.endereco}
             </dt>
-            <dd className="text-right font-medium text-foreground">{enderecoBrazillianNail}</dd>
+            <dd className="text-right font-medium text-foreground">{enderecoDoNegocio(configuracoes)}</dd>
           </div>
         </dl>
 
@@ -211,6 +217,15 @@ export function LembreteDetailsPanel({
               labelWhatsapp={l.acoes.abrirWhatsapp}
               labelSms={l.acoes.prepararSms}
               avisoLembretesDesativados={p.avisoNaoReceber}
+              onAbrirCanal={(canal) =>
+                registrarMensagemPreparada({
+                  lembreteId: lembrete.id,
+                  papel: "principal",
+                  canal,
+                  idioma: contato!.idioma,
+                  texto: mensagem,
+                })
+              }
             />
           </div>
         )}
@@ -247,6 +262,15 @@ export function LembreteDetailsPanel({
               labelWhatsapp={l.acoes.abrirWhatsapp}
               labelSms={l.acoes.prepararSms}
               avisoLembretesDesativados={p.avisoNaoReceber}
+              onAbrirCanal={(canal) =>
+                registrarMensagemPreparada({
+                  lembreteId: lembrete.id,
+                  papel: "secundario",
+                  canal,
+                  idioma: contatoSecundario.idioma,
+                  texto: mensagemSecundario,
+                })
+              }
             />
           </div>
         )}

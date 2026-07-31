@@ -1,5 +1,6 @@
 import type { Cliente, Contato } from "@/lib/clientes-mock";
-import { buildMensagemContato, enderecoBrazillianNail } from "@/lib/mensagens";
+import type { ConfiguracoesState } from "@/lib/configuracoes-mock";
+import { buildMensagemLembreteConfiguravel } from "@/lib/mensagens";
 
 export type LembreteStatusAgendamento = "aguardando" | "confirmado";
 export type LembreteStatus =
@@ -23,73 +24,29 @@ export type Lembrete = {
   mensagemPersonalizadaSecundario: string | null;
 };
 
-export { enderecoBrazillianNail };
+/** Monta o endereço do negócio a partir de Configurações — fonte única para exibição e mensagens. */
+export function enderecoDoNegocio(configuracoes: ConfiguracoesState) {
+  const { endereco, cidade, estado, zip } = configuracoes.negocio;
+  return `${endereco}, ${cidade}, ${estado} ${zip}`;
+}
 
-export const mockLembretes: Lembrete[] = [
-  {
-    id: "lem-1",
-    clienteId: "CLI-000001",
-    horario: "9:00 AM",
-    servicoPt: "Manutenção",
-    servicoEn: "Maintenance",
-    statusAgendamento: "aguardando",
-    statusLembrete: "pendente",
-    consentimentoRegistrado: true,
-    mensagemPersonalizada: null,
-    mensagemPersonalizadaSecundario: null,
-  },
-  {
-    id: "lem-2",
-    clienteId: "CLI-000002",
-    horario: "11:00 AM",
-    servicoPt: "Esmaltação em gel",
-    servicoEn: "Gel polish",
-    statusAgendamento: "confirmado",
-    statusLembrete: "preparado",
-    consentimentoRegistrado: true,
-    mensagemPersonalizada: null,
-    mensagemPersonalizadaSecundario: null,
-  },
-  {
-    id: "lem-3",
-    clienteId: "CLI-000003",
-    horario: "2:00 PM",
-    servicoPt: "Alongamento",
-    servicoEn: "Nail extension",
-    statusAgendamento: "aguardando",
-    statusLembrete: "pendente",
-    consentimentoRegistrado: false,
-    mensagemPersonalizada: null,
-    mensagemPersonalizadaSecundario: null,
-  },
-  {
-    id: "lem-4",
-    clienteId: "CLI-000004",
-    horario: "4:30 PM",
-    servicoPt: "Serviço a definir",
-    servicoEn: "Service to be defined",
-    statusAgendamento: "aguardando",
-    statusLembrete: "indisponivel",
-    consentimentoRegistrado: true,
-    mensagemPersonalizada: null,
-    mensagemPersonalizadaSecundario: null,
-  },
-];
-
-/** Monta a mensagem padrão do lembrete no idioma do contato informado (PT, EN ou bilíngue). */
+/** Monta a mensagem do lembrete a partir do template configurável (Configurações → Lembretes),
+ * no idioma do contato informado (PT, EN ou bilíngue). */
 export function buildMensagemLembrete(
   lembrete: Lembrete,
   cliente: Cliente | undefined,
   contato: Contato | null,
   dataAmanha: string,
+  configuracoes: ConfiguracoesState,
 ) {
   const nome = cliente?.nomePreferencia ?? cliente?.nome ?? "";
   const idioma = contato?.idioma ?? "pt";
-  return buildMensagemContato(idioma, {
+  return buildMensagemLembreteConfiguravel(idioma, configuracoes.lembretes.textoPadraoPt, configuracoes.lembretes.textoPadraoEn, {
     nome,
     data: dataAmanha,
     horario: lembrete.horario,
-    servicoPt: lembrete.servicoPt,
-    servicoEn: lembrete.servicoEn,
+    servico: idioma === "en" ? lembrete.servicoEn : lembrete.servicoPt,
+    negocio: configuracoes.negocio.nomeCurto,
+    endereco: enderecoDoNegocio(configuracoes),
   });
 }

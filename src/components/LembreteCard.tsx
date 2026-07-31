@@ -2,6 +2,8 @@
 
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
+import { useLembretes } from "@/components/LembretesProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { LembreteStatusBadge } from "@/components/LembreteStatusBadge";
 import { ContatoAcoesMensagem } from "@/components/ContatoAcoesMensagem";
@@ -22,6 +24,8 @@ const actionButtonClasses =
 export function LembreteCard({ lembrete, selected, dataAmanha, onSelect }: LembreteCardProps) {
   const { locale, t } = useLanguage();
   const { getCliente } = useClientes();
+  const { configuracoes } = useConfiguracoes();
+  const { registrarMensagemPreparada } = useLembretes();
   const l = t.lembretes;
   const c = t.clientes;
 
@@ -41,7 +45,7 @@ export function LembreteCard({ lembrete, selected, dataAmanha, onSelect }: Lembr
     if (contato === contatoSecundario && lembrete.mensagemPersonalizadaSecundario) {
       return lembrete.mensagemPersonalizadaSecundario;
     }
-    return buildMensagemLembrete(lembrete, cliente, contato, dataAmanha);
+    return buildMensagemLembrete(lembrete, cliente, contato, dataAmanha, configuracoes);
   }
 
   return (
@@ -114,6 +118,15 @@ export function LembreteCard({ lembrete, selected, dataAmanha, onSelect }: Lembr
             labelWhatsapp={l.acoes.abrirWhatsapp}
             labelSms={l.acoes.prepararSms}
             avisoLembretesDesativados={l.painel.avisoNaoReceber}
+            onAbrirCanal={(canal) =>
+              registrarMensagemPreparada({
+                lembreteId: lembrete.id,
+                papel: "principal",
+                canal,
+                idioma: contatoPrincipal.idioma,
+                texto: mensagemPara(contatoPrincipal),
+              })
+            }
           />
         </div>
       )}
@@ -127,6 +140,15 @@ export function LembreteCard({ lembrete, selected, dataAmanha, onSelect }: Lembr
             labelWhatsapp={l.acoes.abrirWhatsapp}
             labelSms={l.acoes.prepararSms}
             avisoLembretesDesativados={l.painel.avisoNaoReceber}
+            onAbrirCanal={(canal) =>
+              registrarMensagemPreparada({
+                lembreteId: lembrete.id,
+                papel: "secundario",
+                canal,
+                idioma: contatoSecundario.idioma,
+                texto: mensagemPara(contatoSecundario),
+              })
+            }
           />
         </div>
       )}
