@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
 import { useServicos } from "@/components/ServicosProvider";
 import { useAgenda } from "@/components/AgendaProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon, PlusIcon, AlertIcon } from "@/components/icons";
 import { financasTravadas, type Atendimento, type ServicoRealizado } from "@/lib/atendimentos-mock";
 import { formatDateISO, parseDateISO, formatDateMMDDYYYY, parseDateMMDDYYYY, formatMinutesAsTime } from "@/lib/date";
 import { buildTimeBoundaries } from "@/lib/agenda-mock";
+import { expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 
 type AtendimentoFormModalProps = {
   modo: "criar" | "editar";
@@ -52,7 +54,14 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
   const { clientes } = useClientes();
   const { servicos } = useServicos();
   const { agendamentos } = useAgenda();
+  const { configuracoes } = useConfiguracoes();
   const f = t.atendimentos.formulario;
+
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
+  const horariosDisponiveis = useMemo(
+    () => buildTimeBoundaries(expediente.inicioMin, expediente.fimMin),
+    [expediente],
+  );
 
   const [clienteId, setClienteId] = useState(atendimento?.clienteId ?? "");
   const [agendamentoId, setAgendamentoId] = useState(atendimento?.agendamentoId ?? "");
@@ -61,9 +70,9 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
     atendimento ? formatDateISO(parseDateMMDDYYYY(atendimento.data)) : formatDateISO(new Date()),
   );
   const [inicioMin, setInicioMin] = useState(() => {
-    if (!atendimento) return buildTimeBoundaries()[0];
-    const encontrado = buildTimeBoundaries().find((min) => formatMinutesAsTime(min) === atendimento.horarioInicio);
-    return encontrado ?? buildTimeBoundaries()[0];
+    if (!atendimento) return horariosDisponiveis[0];
+    const encontrado = horariosDisponiveis.find((min) => formatMinutesAsTime(min) === atendimento.horarioInicio);
+    return encontrado ?? horariosDisponiveis[0];
   });
   const [linhas, setLinhas] = useState<ServicoLinha[]>(() => linhasIniciais(atendimento?.servicos ?? []));
   const [desconto, setDesconto] = useState(String(atendimento?.desconto ?? 0));
@@ -89,7 +98,6 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
 
   const servicosAtivos = servicos.filter((servico) => servico.status === "ativo");
   const agendamentosDaCliente = agendamentos.filter((ag) => ag.clienteId === clienteId);
-  const horarios = buildTimeBoundaries();
 
   function atualizarLinha(key: string, patch: Partial<ServicoLinha>) {
     setLinhas((prev) => prev.map((linha) => (linha.key === key ? { ...linha, ...patch } : linha)));
@@ -287,7 +295,7 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-foreground/70">{f.horarioInicio}</span>
             <select value={inicioMin} onChange={(event) => setInicioMin(Number(event.target.value))} className={inputClass}>
-              {horarios.map((min) => (
+              {horariosDisponiveis.map((min) => (
                 <option key={min} value={min}>
                   {formatMinutesAsTime(min)}
                 </option>

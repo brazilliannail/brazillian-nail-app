@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
 import { useServicos } from "@/components/ServicosProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon, AlertIcon } from "@/components/icons";
-import { DAY_START_MIN, DAY_END_MIN, SLOT_MIN, buildTimeBoundaries, type AgendaAppointment } from "@/lib/agenda-mock";
+import { SLOT_MIN, buildTimeBoundaries, type AgendaAppointment } from "@/lib/agenda-mock";
+import { expedienteDeConfiguracoes, diaSemanaDeData } from "@/lib/configuracoes-mock";
 import { formatDateISO, parseDateISO, formatDateMMDDYYYY, parseDateMMDDYYYY, formatMinutesAsTime } from "@/lib/date";
 
 type AgendaFormModalProps = {
@@ -24,15 +26,18 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
   const { t } = useLanguage();
   const { clientes } = useClientes();
   const { servicos } = useServicos();
+  const { configuracoes } = useConfiguracoes();
   const f = t.agenda.formulario;
+
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
 
   const [clienteId, setClienteId] = useState(agendamento?.clienteId ?? "");
   const [servicoId, setServicoId] = useState(agendamento?.servicoId ?? "");
   const [dataIso, setDataIso] = useState(() =>
     agendamento ? formatDateISO(parseDateMMDDYYYY(agendamento.data)) : formatDateISO(dataPadrao),
   );
-  const [inicioMin, setInicioMin] = useState(agendamento?.inicioMin ?? DAY_START_MIN);
-  const [fimMin, setFimMin] = useState(agendamento?.fimMin ?? DAY_START_MIN + SLOT_MIN);
+  const [inicioMin, setInicioMin] = useState(agendamento?.inicioMin ?? expediente.inicioMin);
+  const [fimMin, setFimMin] = useState(agendamento?.fimMin ?? expediente.inicioMin + SLOT_MIN);
   const [valorEstimado, setValorEstimado] = useState(
     agendamento?.valorEstimado !== null && agendamento?.valorEstimado !== undefined ? String(agendamento.valorEstimado) : "",
   );
@@ -43,15 +48,17 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
 
   const opcoesServico = servicos.filter((servico) => servico.status === "ativo" || servico.id === agendamento?.servicoId);
-  const horariosInicio = buildTimeBoundaries().filter((min) => min < DAY_END_MIN);
-  const horariosFim = buildTimeBoundaries().filter((min) => min > inicioMin && min <= DAY_END_MIN);
+  const horariosInicio = buildTimeBoundaries(expediente.inicioMin, expediente.fimMin).filter((min) => min < expediente.fimMin);
+  const horariosFim = buildTimeBoundaries(expediente.inicioMin, expediente.fimMin).filter(
+    (min) => min > inicioMin && min <= expediente.fimMin,
+  );
 
   const houveAlteracoes =
     clienteId !== (agendamento?.clienteId ?? "") ||
     servicoId !== (agendamento?.servicoId ?? "") ||
     dataIso !== (agendamento ? formatDateISO(parseDateMMDDYYYY(agendamento.data)) : formatDateISO(dataPadrao)) ||
-    inicioMin !== (agendamento?.inicioMin ?? DAY_START_MIN) ||
-    fimMin !== (agendamento?.fimMin ?? DAY_START_MIN + SLOT_MIN) ||
+    inicioMin !== (agendamento?.inicioMin ?? expediente.inicioMin) ||
+    fimMin !== (agendamento?.fimMin ?? expediente.inicioMin + SLOT_MIN) ||
     valorEstimado !==
       (agendamento?.valorEstimado !== null && agendamento?.valorEstimado !== undefined ? String(agendamento.valorEstimado) : "") ||
     observacoesPt !== (agendamento?.observacoesPt ?? "") ||
@@ -69,7 +76,7 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
     const duracao = fimMin - inicioMin;
     setInicioMin(novoInicioMin);
     const novoFim = novoInicioMin + duracao;
-    setFimMin(novoFim <= DAY_END_MIN ? novoFim : Math.min(novoInicioMin + SLOT_MIN, DAY_END_MIN));
+    setFimMin(novoFim <= expediente.fimMin ? novoFim : Math.min(novoInicioMin + SLOT_MIN, expediente.fimMin));
   }
 
   function validarESalvar(): boolean {
@@ -81,8 +88,12 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
       setErro(f.erros.horarioInvalido);
       return false;
     }
-    if (inicioMin < DAY_START_MIN || fimMin > DAY_END_MIN) {
+    if (inicioMin < expediente.inicioMin || fimMin > expediente.fimMin) {
       setErro(f.erros.horarioForaExpediente);
+      return false;
+    }
+    if (!expediente.diasFuncionamento.includes(diaSemanaDeData(parseDateISO(dataIso)))) {
+      setErro(f.erros.diaForaExpediente);
       return false;
     }
 
@@ -95,8 +106,8 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
       servicoId: null,
       status: "aguardando",
       data: "",
-      inicioMin: DAY_START_MIN,
-      fimMin: DAY_START_MIN + SLOT_MIN,
+      inicioMin: expediente.inicioMin,
+      fimMin: expediente.inicioMin + SLOT_MIN,
       valorEstimado: null,
       observacoesPt: "",
       observacoesEn: "",

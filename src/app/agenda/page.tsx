@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useAgenda } from "@/components/AgendaProvider";
 import { useAtendimentos } from "@/components/AtendimentosProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { StatCard } from "@/components/StatCard";
 import { AgendaDayGrid } from "@/components/AgendaDayGrid";
 import { AgendaDetailsPanel } from "@/components/AgendaDetailsPanel";
@@ -13,6 +14,7 @@ import { ReagendarModal } from "@/components/ReagendarModal";
 import { CalendarIcon, CheckIcon, ClockIcon, WalletIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { formatDateMMDDYYYY, addDays } from "@/lib/date";
 import { computeResumoDia, type AgendaAppointment } from "@/lib/agenda-mock";
+import { expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 import type { StatusKey } from "@/lib/mock-data";
 
 type ViewMode = "dia" | "semana" | "mes";
@@ -22,6 +24,8 @@ export default function AgendaPage() {
   const { t } = useLanguage();
   const { agendamentos, addAgendamento, updateAgendamento, updateStatus, reagendar } = useAgenda();
   const { iniciarAtendimentoDoAgendamento } = useAtendimentos();
+  const { configuracoes } = useConfiguracoes();
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
   const [view, setView] = useState<ViewMode>("dia");
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -62,11 +66,11 @@ export default function AgendaPage() {
     [agendamentos, dataSelecionada],
   );
 
-  const resumo = computeResumoDia(agendaDoDia);
+  const resumo = computeResumoDia(agendaDoDia, expediente.inicioMin, expediente.fimMin);
   const selectedAppointment = agendaDoDia.find((apt) => apt.id === selectedId) ?? null;
 
   function existeConflito(data: string, inicioMin: number, fimMin: number) {
-    if (!selectedAppointment) return false;
+    if (!selectedAppointment || !configuracoes.agenda.bloqueioConflitoHorario) return false;
     return agendamentos.some(
       (apt) =>
         apt.id !== selectedAppointment.id &&

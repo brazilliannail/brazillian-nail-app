@@ -4,6 +4,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapConfiguracaoRow, stateToRow } from "@/lib/configuracoes-repo";
 import type { ConfiguracoesState } from "@/lib/configuracoes-mock";
+import { parseTimeToMinutes } from "@/lib/date";
+
+/** Formato aceito para `horarioAbertura`/`horarioFechamento`: "H:MM AM/PM" (ex.: "9:00 AM").
+ * `horarioAbertura`/`horarioFechamento` são campos de texto livre na tela de Configurações — sem
+ * essa validação na gravação, um valor malformado quebraria a leitura de expediente em toda a
+ * Agenda (`agenda-actions.ts`), não só na própria tela. */
+const HORARIO_REGEX = /^\d{1,2}:\d{2}\s*(AM|PM)$/i;
 
 function validarConfiguracoes(dados: ConfiguracoesState) {
   const camposObrigatorios: [string, string][] = [
@@ -24,6 +31,15 @@ function validarConfiguracoes(dados: ConfiguracoesState) {
     if (valor.trim() === "") throw new Error(mensagem);
   }
 
+  if (!HORARIO_REGEX.test(dados.agenda.horarioAbertura.trim())) {
+    throw new Error('Horário de abertura inválido — use o formato H:MM AM/PM (ex.: "9:00 AM").');
+  }
+  if (!HORARIO_REGEX.test(dados.agenda.horarioFechamento.trim())) {
+    throw new Error('Horário de fechamento inválido — use o formato H:MM AM/PM (ex.: "7:00 PM").');
+  }
+  if (parseTimeToMinutes(dados.agenda.horarioAbertura) >= parseTimeToMinutes(dados.agenda.horarioFechamento)) {
+    throw new Error("Horário de abertura deve ser antes do horário de fechamento.");
+  }
   if (dados.agenda.diasFuncionamento.length === 0) {
     throw new Error("Selecione ao menos um dia de funcionamento.");
   }

@@ -10,6 +10,7 @@ import { useClientes } from "@/components/ClientesProvider";
 import { useLancamentosCaixa } from "@/components/FinanceiroProvider";
 import { useLembretes } from "@/components/LembretesProvider";
 import { useServicos } from "@/components/ServicosProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AgendaFormModal } from "@/components/AgendaFormModal";
@@ -18,6 +19,7 @@ import { AtendimentoFormModal } from "@/components/AtendimentoFormModal";
 import { ClockIcon, CalendarIcon, WalletIcon, BellIcon, PlusIcon, UserPlusIcon, ZapIcon } from "@/components/icons";
 import { formatDateMMDDYYYY, formatMinutesAsTime, isHorarioAgendamentoPassado } from "@/lib/date";
 import { computeResumoDia, type AgendaAppointment } from "@/lib/agenda-mock";
+import { expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 import type { Cliente } from "@/lib/clientes-mock";
 import type { Atendimento } from "@/lib/atendimentos-mock";
 import { calcularAgregadoFinanceiro, calcularSaldoAbertoGlobal } from "@/lib/financeiro-service";
@@ -40,6 +42,8 @@ export default function Home() {
   const lancamentosCaixa = useLancamentosCaixa();
   const { lembretes } = useLembretes();
   const { getServico } = useServicos();
+  const { configuracoes } = useConfiguracoes();
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
 
   const [formAberto, setFormAberto] = useState<FormAberto>(null);
   const [erroAgendamento, setErroAgendamento] = useState<string | null>(null);
@@ -67,7 +71,7 @@ export default function Home() {
       }`
     : "—";
 
-  const resumoAgendaHoje = computeResumoDia(agendaHoje);
+  const resumoAgendaHoje = computeResumoDia(agendaHoje, expediente.inicioMin, expediente.fimMin);
 
   const rangeHoje = getMainRange("hoje", hoje);
   const agregadoHoje = calcularAgregadoFinanceiro(atendimentos, lancamentosCaixa, rangeHoje);

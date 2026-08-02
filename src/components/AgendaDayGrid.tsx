@@ -1,11 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
 import { useServicos } from "@/components/ServicosProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AlertIcon } from "@/components/icons";
-import { DAY_START_MIN, DAY_END_MIN, SLOT_MIN, buildTimeBoundaries, type AgendaAppointment } from "@/lib/agenda-mock";
+import { SLOT_MIN, buildTimeBoundaries, type AgendaAppointment } from "@/lib/agenda-mock";
+import { expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 import { formatMinutesAsTime, isHorarioAgendamentoPassado } from "@/lib/date";
 
 const SLOT_HEIGHT = 56;
@@ -31,8 +34,10 @@ export function AgendaDayGrid({ appointments, selectedDate, selectedId, onSelect
   const { t } = useLanguage();
   const { getCliente } = useClientes();
   const { getServico } = useServicos();
-  const boundaries = buildTimeBoundaries();
-  const totalHeight = ((DAY_END_MIN - DAY_START_MIN) / SLOT_MIN) * SLOT_HEIGHT;
+  const { configuracoes } = useConfiguracoes();
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
+  const boundaries = buildTimeBoundaries(expediente.inicioMin, expediente.fimMin);
+  const totalHeight = ((expediente.fimMin - expediente.inicioMin) / SLOT_MIN) * SLOT_HEIGHT;
 
   return (
     <div className="relative" style={{ height: totalHeight + 1 }}>
@@ -54,7 +59,7 @@ export function AgendaDayGrid({ appointments, selectedDate, selectedId, onSelect
 
       <div className="absolute inset-y-0 right-0" style={{ left: TIME_COLUMN_WIDTH }}>
         {appointments.map((apt) => {
-          const top = ((apt.inicioMin - DAY_START_MIN) / SLOT_MIN) * SLOT_HEIGHT;
+          const top = ((apt.inicioMin - expediente.inicioMin) / SLOT_MIN) * SLOT_HEIGHT;
           const height = ((apt.fimMin - apt.inicioMin) / SLOT_MIN) * SLOT_HEIGHT;
           const servico = apt.servicoId ? getServico(apt.servicoId)?.nome ?? t.agenda.detalhes.aDefinir : t.agenda.detalhes.aDefinir;
           const selected = apt.id === selectedId;

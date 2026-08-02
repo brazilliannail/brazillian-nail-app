@@ -127,6 +127,7 @@ export const dictionary = {
           clienteObrigatoria: "Selecione uma cliente.",
           horarioInvalido: "O horário de início deve ser anterior ao horário de término.",
           horarioForaExpediente: "O horário deve estar dentro do expediente.",
+          diaForaExpediente: "Este dia da semana está fora do expediente configurado.",
           conflito: "Já existe um agendamento nesse horário. Escolha outro horário ou data.",
         },
         botoes: {
@@ -1057,6 +1058,7 @@ export const dictionary = {
           clienteObrigatoria: "Select a client.",
           horarioInvalido: "The start time must be earlier than the end time.",
           horarioForaExpediente: "The time must be within business hours.",
+          diaForaExpediente: "This day of the week is outside the configured business hours.",
           conflito: "There is already an appointment at that time. Choose another time or date.",
         },
         botoes: {

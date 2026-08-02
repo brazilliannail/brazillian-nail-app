@@ -1,7 +1,5 @@
 import type { StatusKey } from "@/lib/mock-data";
 
-export const DAY_START_MIN = 8 * 60; // 8:00 AM
-export const DAY_END_MIN = 18 * 60; // 6:00 PM
 export const SLOT_MIN = 30;
 
 export type AgendaAppointment = {
@@ -23,20 +21,22 @@ export function formatAgendamentoId(numero: number) {
   return `AGD-${String(numero).padStart(6, "0")}`;
 }
 
-/** Marcações de horário de 30 em 30 minutos, das 8:00 AM às 6:00 PM. */
-export function buildTimeBoundaries() {
+/** Marcações de horário de `SLOT_MIN` em `SLOT_MIN` minutos, dentro do expediente informado
+ * (`inicioMin`/`fimMin` — ver `expedienteDeConfiguracoes` em `configuracoes-mock.ts`, única fonte
+ * do expediente real, gravado em Configurações). */
+export function buildTimeBoundaries(inicioMin: number, fimMin: number): number[] {
   const boundaries: number[] = [];
-  for (let min = DAY_START_MIN; min <= DAY_END_MIN; min += SLOT_MIN) {
+  for (let min = inicioMin; min <= fimMin; min += SLOT_MIN) {
     boundaries.push(min);
   }
   return boundaries;
 }
 
-export function computeResumoDia(appointments: AgendaAppointment[]) {
-  const totalSlots = (DAY_END_MIN - DAY_START_MIN) / SLOT_MIN;
+export function computeResumoDia(appointments: AgendaAppointment[], inicioMin: number, fimMin: number) {
+  const totalSlots = (fimMin - inicioMin) / SLOT_MIN;
   let occupiedSlots = 0;
 
-  for (let slotStart = DAY_START_MIN; slotStart < DAY_END_MIN; slotStart += SLOT_MIN) {
+  for (let slotStart = inicioMin; slotStart < fimMin; slotStart += SLOT_MIN) {
     const slotEnd = slotStart + SLOT_MIN;
     const occupied = appointments.some((apt) => apt.inicioMin < slotEnd && apt.fimMin > slotStart);
     if (occupied) occupiedSlots += 1;

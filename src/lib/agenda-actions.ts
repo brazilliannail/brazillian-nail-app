@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapAgendamentoRow } from "@/lib/agenda-repo";
-import { DAY_START_MIN, DAY_END_MIN, type AgendaAppointment } from "@/lib/agenda-mock";
+import { type AgendaAppointment } from "@/lib/agenda-mock";
 import type { StatusKey } from "@/lib/mock-data";
-import { mmddyyyyToISO } from "@/lib/date";
+import { mmddyyyyToISO, parseDateISO } from "@/lib/date";
+import { getConfiguracoes } from "@/lib/configuracoes-repo";
+import { expedienteDeConfiguracoes, diaSemanaDeData, type Expediente } from "@/lib/configuracoes-mock";
 
 /** Próximo id de agendamento, a partir de `numero_sequencial` (coluna indexada e única — mesmo
  * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
@@ -15,12 +17,21 @@ async function nextAgendamentoId(): Promise<{ id: string; numeroSequencial: numb
   return { id: `AGD-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
-function validarHorario(inicioMin: number, fimMin: number) {
+function validarHorario(inicioMin: number, fimMin: number, expediente: Expediente) {
   if (inicioMin >= fimMin) {
     throw new Error("O horário de início deve ser anterior ao horário de término.");
   }
-  if (inicioMin < DAY_START_MIN || fimMin > DAY_END_MIN) {
+  if (inicioMin < expediente.inicioMin || fimMin > expediente.fimMin) {
     throw new Error("O horário deve estar dentro do expediente.");
+  }
+}
+
+/** Rejeita datas fora dos dias de funcionamento configurados (ex.: domingo, se não estiver
+ * marcado em Configurações → Agenda → Dias de funcionamento). */
+function validarDiaFuncionamento(dataIso: string, expediente: Expediente) {
+  const dia = diaSemanaDeData(parseDateISO(dataIso));
+  if (!expediente.diasFuncionamento.includes(dia)) {
+    throw new Error("Este dia da semana está fora do expediente configurado.");
   }
 }
 
@@ -43,16 +54,22 @@ async function existeConflito(
   return conflitos.length > 0;
 }
 
-/** Cria um agendamento novo no banco SQLite via Prisma, validando expediente e conflito de horário. */
+/** Cria um agendamento novo no banco SQLite via Prisma, validando expediente (horário + dia de
+ * funcionamento, de Configurações) e conflito de horário (se `agendaBloqueioConflito` estiver
+ * ativo). */
 export async function createAgendamentoAction(dados: Omit<AgendaAppointment, "id">): Promise<AgendaAppointment> {
   if (dados.clienteId.trim() === "") {
     throw new Error("Selecione uma cliente.");
   }
-  validarHorario(dados.inicioMin, dados.fimMin);
+
+  const configuracoes = await getConfiguracoes();
+  const expediente = expedienteDeConfiguracoes(configuracoes.agenda);
+  validarHorario(dados.inicioMin, dados.fimMin, expediente);
 
   const dataIso = mmddyyyyToISO(dados.data);
+  validarDiaFuncionamento(dataIso, expediente);
 
-  if (await existeConflito(dataIso, dados.inicioMin, dados.fimMin)) {
+  if (configuracoes.agenda.bloqueioConflitoHorario && (await existeConflito(dataIso, dados.inicioMin, dados.fimMin))) {
     throw new Error("Já existe um agendamento nesse horário.");
   }
 
@@ -78,12 +95,17 @@ export async function createAgendamentoAction(dados: Omit<AgendaAppointment, "id
   return mapAgendamentoRow(row);
 }
 
-/** Atualiza os dados de um agendamento existente, validando expediente e conflito de horário. */
+/** Atualiza os dados de um agendamento existente, validando expediente (horário + dia de
+ * funcionamento, de Configurações) e conflito de horário (se `agendaBloqueioConflito` estiver
+ * ativo). */
 export async function updateAgendamentoAction(agendamento: AgendaAppointment): Promise<AgendaAppointment> {
   if (agendamento.clienteId.trim() === "") {
     throw new Error("Selecione uma cliente.");
   }
-  validarHorario(agendamento.inicioMin, agendamento.fimMin);
+
+  const configuracoes = await getConfiguracoes();
+  const expediente = expedienteDeConfiguracoes(configuracoes.agenda);
+  validarHorario(agendamento.inicioMin, agendamento.fimMin, expediente);
 
   const existente = await prisma.agendamento.findUnique({ where: { id: agendamento.id } });
   if (!existente) {
@@ -91,8 +113,12 @@ export async function updateAgendamentoAction(agendamento: AgendaAppointment): P
   }
 
   const dataIso = mmddyyyyToISO(agendamento.data);
+  validarDiaFuncionamento(dataIso, expediente);
 
-  if (await existeConflito(dataIso, agendamento.inicioMin, agendamento.fimMin, agendamento.id)) {
+  if (
+    configuracoes.agenda.bloqueioConflitoHorario &&
+    (await existeConflito(dataIso, agendamento.inicioMin, agendamento.fimMin, agendamento.id))
+  ) {
     throw new Error("Já existe um agendamento nesse horário.");
   }
 
@@ -152,15 +178,18 @@ export async function updateStatusAgendamentoAction(id: string, status: StatusKe
  */
 const STATUS_REAGENDAVEIS = new Set<StatusKey>(["aguardando", "confirmado", "cancelado"]);
 
-/** Reagenda um agendamento existente para nova data/horário, validando expediente, conflito e
- * status de origem. Reativa `cancelado` para `aguardando` ao reagendar. */
+/** Reagenda um agendamento existente para nova data/horário, validando expediente (horário + dia
+ * de funcionamento, de Configurações), conflito de horário (se `agendaBloqueioConflito` estiver
+ * ativo) e status de origem. Reativa `cancelado` para `aguardando` ao reagendar. */
 export async function reagendarAgendamentoAction(
   id: string,
   novaData: string,
   novoInicioMin: number,
   novoFimMin: number,
 ): Promise<AgendaAppointment> {
-  validarHorario(novoInicioMin, novoFimMin);
+  const configuracoes = await getConfiguracoes();
+  const expediente = expedienteDeConfiguracoes(configuracoes.agenda);
+  validarHorario(novoInicioMin, novoFimMin, expediente);
 
   const existente = await prisma.agendamento.findUnique({ where: { id } });
   if (!existente) {
@@ -172,8 +201,12 @@ export async function reagendarAgendamentoAction(
   }
 
   const dataIso = mmddyyyyToISO(novaData);
+  validarDiaFuncionamento(dataIso, expediente);
 
-  if (await existeConflito(dataIso, novoInicioMin, novoFimMin, id)) {
+  if (
+    configuracoes.agenda.bloqueioConflitoHorario &&
+    (await existeConflito(dataIso, novoInicioMin, novoFimMin, id))
+  ) {
     throw new Error("Já existe um agendamento nesse horário.");
   }
 

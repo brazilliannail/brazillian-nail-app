@@ -1,4 +1,5 @@
 import type { FormaPagamento } from "@/lib/atendimentos-mock";
+import { parseTimeToMinutes } from "@/lib/date";
 
 export type CanalLembrete = "whatsapp" | "sms";
 export type SessaoExpiracao = "15" | "30" | "60" | "240";
@@ -65,6 +66,33 @@ export const FORMATOS_DATA = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
 export const FORMATOS_HORA = ["12h (AM/PM)", "24h"];
 
 export const DIAS_SEMANA: DiaSemana[] = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+
+export type Expediente = {
+  inicioMin: number;
+  fimMin: number;
+  diasFuncionamento: DiaSemana[];
+};
+
+/**
+ * Deriva o expediente (em minutos) a partir de `ConfiguracoesState.agenda` — única conversão dos
+ * horários salvos como texto ("9:00 AM"/"7:00 PM") para minutos, reaproveitada tanto no servidor
+ * (`agenda-actions.ts`) quanto no cliente (grade e formulários de Agenda/Atendimentos), para nunca
+ * haver duas fontes de expediente divergentes. Reaproveita `parseTimeToMinutes` (date.ts), já
+ * usado para o mesmo formato em `ConcluirAtendimentoModal`.
+ */
+export function expedienteDeConfiguracoes(agenda: ConfiguracoesState["agenda"]): Expediente {
+  return {
+    inicioMin: parseTimeToMinutes(agenda.horarioAbertura),
+    fimMin: parseTimeToMinutes(agenda.horarioFechamento),
+    diasFuncionamento: agenda.diasFuncionamento,
+  };
+}
+
+/** Dia da semana (mesmo domínio de `DIAS_SEMANA`) de uma data — o índice de `Date.getDay()`
+ * (0 = domingo) coincide com a ordem de `DIAS_SEMANA`. */
+export function diaSemanaDeData(data: Date): DiaSemana {
+  return DIAS_SEMANA[data.getDay()];
+}
 
 export const DURACOES_PADRAO = [30, 45, 60, 90, 120];
 

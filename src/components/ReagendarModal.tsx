@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon } from "@/components/icons";
-import {
-  DAY_START_MIN,
-  DAY_END_MIN,
-  buildTimeBoundaries,
-  type AgendaAppointment,
-} from "@/lib/agenda-mock";
+import { buildTimeBoundaries, type AgendaAppointment } from "@/lib/agenda-mock";
+import { expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 import { formatDateISO, parseDateISO, formatDateMMDDYYYY, formatMinutesAsTime } from "@/lib/date";
 
 type ReagendarModalProps = {
@@ -20,7 +17,10 @@ type ReagendarModalProps = {
 
 export function ReagendarModal({ appointment, verificarConflito, onSave, onClose }: ReagendarModalProps) {
   const { t } = useLanguage();
+  const { configuracoes } = useConfiguracoes();
   const m = t.agenda.reagendarModal;
+
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
 
   const duracaoMin = appointment.fimMin - appointment.inicioMin;
   const [dataIso, setDataIso] = useState(() => {
@@ -30,8 +30,8 @@ export function ReagendarModal({ appointment, verificarConflito, onSave, onClose
   const [inicioMin, setInicioMin] = useState(appointment.inicioMin);
   const [conflito, setConflito] = useState(false);
 
-  const horariosDisponiveis = buildTimeBoundaries().filter(
-    (min) => min >= DAY_START_MIN && min + duracaoMin <= DAY_END_MIN,
+  const horariosDisponiveis = buildTimeBoundaries(expediente.inicioMin, expediente.fimMin).filter(
+    (min) => min >= expediente.inicioMin && min + duracaoMin <= expediente.fimMin,
   );
 
   function handleConfirmar() {

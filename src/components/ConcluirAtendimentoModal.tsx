@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useConfiguracoes } from "@/components/ConfiguracoesProvider";
 import { CloseIcon } from "@/components/icons";
@@ -8,7 +8,7 @@ import type { Atendimento, AtendimentoStatus, FormaPagamento } from "@/lib/atend
 import { valorTotalDevido } from "@/lib/atendimentos-mock";
 import { buildTimeBoundaries } from "@/lib/agenda-mock";
 import { formatMinutesAsTime, parseTimeToMinutes } from "@/lib/date";
-import { FORMAS_PAGAMENTO } from "@/lib/configuracoes-mock";
+import { FORMAS_PAGAMENTO, expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 
 type StatusFinal = Extract<
   AtendimentoStatus,
@@ -51,7 +51,8 @@ export function ConcluirAtendimentoModal({ atendimento, onClose, onConcluir, err
     (forma) => formasAtivas[forma] || forma === atendimento.formaPagamento,
   );
 
-  const horarios = buildTimeBoundaries();
+  const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
+  const horarios = useMemo(() => buildTimeBoundaries(expediente.inicioMin, expediente.fimMin), [expediente]);
   const inicioMin = parseTimeToMinutes(atendimento.horarioInicio);
   const devido = valorTotalDevido(atendimento);
 
