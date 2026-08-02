@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapAtendimentoRow } from "@/lib/atendimentos-repo";
 import { mapAgendamentoRow } from "@/lib/agenda-repo";
-import type { Atendimento, AtendimentoStatus, FormaPagamento, ServicoRealizado } from "@/lib/atendimentos-mock";
+import {
+  financasTravadas,
+  somaServicos,
+  type Atendimento,
+  type AtendimentoStatus,
+  type FormaPagamento,
+  type ServicoRealizado,
+} from "@/lib/atendimentos-mock";
 import type { AgendaAppointment } from "@/lib/agenda-mock";
 import type { StatusKey } from "@/lib/mock-data";
 import { formatMinutesAsTime, mmddyyyyToISO } from "@/lib/date";
@@ -84,9 +91,10 @@ function validarAtendimento(dados: Omit<Atendimento, "id">) {
   }
 }
 
-/** Assinatura estável de um conjunto de serviços realizados, para detectar mudança de valores. */
-function assinaturaServicos(servicos: ServicoRealizado[]): string {
-  return servicos.map((s) => `${s.servicoId ?? ""}|${s.nomePt}|${s.nomeEn}|${s.valor}`).join(";");
+/** Evita ruído de ponto flutuante (ex.: 0.1 + 0.2) ao comparar totais em dólares — mesmo padrão
+ * já usado em financeiro-service.ts (round2, função local análoga). */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 async function sincronizarServicos(tx: Tx, atendimentoId: string, servicos: ServicoRealizado[]) {
@@ -254,8 +262,15 @@ export async function iniciarAtendimentoDoAgendamentoAction(
 
 /**
  * Atualiza um atendimento existente (não permitido para status encerrado: cancelado/estornado).
- * Assim que existir qualquer pagamento registrado para o atendimento, `desconto` e `servicos`
- * (que definem o valor devido) ficam travados — só campos não financeiros seguem editáveis.
+ * A partir do momento em que o atendimento sai de "emAndamento" — mesmo sem nenhum pagamento
+ * real registrado ainda (ex.: finalizadoPendente, finalizadoCortesia) —, `financasTravadas`
+ * passa a valer: o valor devido (Σ dos serviços − desconto) não pode mais mudar. Dentro dessa
+ * trava, a composição dos serviços é livre (nome, referência de catálogo, ordem, quantidade de
+ * linhas) desde que a soma final não mude — só o total é protegido, não a "assinatura" exata de
+ * cada linha. Campos não financeiros (profissional, data/horário, observações, retorno sugerido,
+ * vínculo com agendamento) seguem sempre editáveis, em qualquer status não encerrado. Qualquer
+ * correção financeira depois da trava precisa passar por `corrigirLancamentoAction` (novo
+ * lançamento no ledger), nunca por aqui.
  */
 export async function updateAtendimentoAction(atendimento: Atendimento): Promise<Atendimento> {
   validarAtendimento(atendimento);
@@ -263,7 +278,7 @@ export async function updateAtendimentoAction(atendimento: Atendimento): Promise
   const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id: atendimento.id },
-      include: { servicos: true, pagamentos: { select: { id: true } } },
+      include: { servicos: true },
     });
     if (!existente) {
       throw new Error("Atendimento não encontrado.");
@@ -272,18 +287,13 @@ export async function updateAtendimentoAction(atendimento: Atendimento): Promise
       throw new Error("Não é possível editar um atendimento cancelado ou estornado.");
     }
 
-    if (existente.pagamentos.length > 0) {
-      if (existente.desconto !== atendimento.desconto) {
-        throw new Error("Não é possível alterar o desconto de um atendimento com pagamento registrado.");
-      }
-      const servicosAtuais: ServicoRealizado[] = existente.servicos.map((s) => ({
-        servicoId: s.servicoId,
-        nomePt: s.nomePt,
-        nomeEn: s.nomeEn,
-        valor: s.valor,
-      }));
-      if (assinaturaServicos(servicosAtuais) !== assinaturaServicos(atendimento.servicos)) {
-        throw new Error("Não é possível alterar os serviços/valores de um atendimento com pagamento registrado.");
+    if (financasTravadas(existente.status as AtendimentoStatus)) {
+      const devidoAtual = round2(somaServicos(existente.servicos) - existente.desconto);
+      const devidoNovo = round2(somaServicos(atendimento.servicos) - atendimento.desconto);
+      if (devidoAtual !== devidoNovo) {
+        throw new Error(
+          "Não é possível alterar o valor devido de um atendimento fora de 'em andamento'. Registre uma correção de lançamento em vez de editar o atendimento.",
+        );
       }
     }
 

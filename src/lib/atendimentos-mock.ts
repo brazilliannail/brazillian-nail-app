@@ -66,6 +66,19 @@ export function somaServicos(servicos: ServicoRealizado[]) {
   return servicos.reduce((total, item) => total + item.valor, 0);
 }
 
+/**
+ * A partir do momento em que o atendimento sai de "emAndamento" — mesmo sem nenhum pagamento
+ * real registrado (ex.: finalizadoPendente, finalizadoCortesia) —, os campos financeiros
+ * (serviços, valor, desconto, gorjeta) ficam travados: o valor devido não pode mais mudar
+ * retroativamente. Qualquer correção financeira depois disso passa a exigir um novo lançamento
+ * no ledger (`corrigirLancamentoAction`), nunca a edição direta do atendimento. Usada tanto no
+ * servidor (`updateAtendimentoAction`) quanto na UI (`AtendimentoFormModal`), para a mesma regra
+ * não divergir entre as duas camadas.
+ */
+export function financasTravadas(status: AtendimentoStatus): boolean {
+  return status !== "emAndamento";
+}
+
 export function valorTotalDevido(atendimento: Atendimento) {
   return somaServicos(atendimento.servicos) - atendimento.desconto;
 }

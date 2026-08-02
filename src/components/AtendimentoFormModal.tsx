@@ -6,7 +6,7 @@ import { useClientes } from "@/components/ClientesProvider";
 import { useServicos } from "@/components/ServicosProvider";
 import { useAgenda } from "@/components/AgendaProvider";
 import { CloseIcon, PlusIcon, AlertIcon } from "@/components/icons";
-import type { Atendimento, ServicoRealizado } from "@/lib/atendimentos-mock";
+import { financasTravadas, type Atendimento, type ServicoRealizado } from "@/lib/atendimentos-mock";
 import { formatDateISO, parseDateISO, formatDateMMDDYYYY, parseDateMMDDYYYY, formatMinutesAsTime } from "@/lib/date";
 import { buildTimeBoundaries } from "@/lib/agenda-mock";
 
@@ -78,6 +78,15 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
   const [erro, setErro] = useState<string | null>(null);
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
 
+  // Assim que o atendimento sai de "emAndamento" — mesmo sem nenhum pagamento real registrado —,
+  // serviço/valor/desconto ficam travados (mesma regra de financasTravadas usada no servidor,
+  // em updateAtendimentoAction). Em modo "criar" nunca há trava. O servidor continua sendo a
+  // fonte da verdade (permite recompor a lista de serviços desde que o total não mude); esta
+  // trava na UI é deliberadamente mais conservadora — desabilita a seção inteira de
+  // serviço/valor/desconto — para deixar o bloqueio óbvio antes do clique em salvar, em vez de
+  // deixar a profissional descobrir a regra só depois de um erro do servidor.
+  const travado = atendimento != null && financasTravadas(atendimento.status);
+
   const servicosAtivos = servicos.filter((servico) => servico.status === "ativo");
   const agendamentosDaCliente = agendamentos.filter((ag) => ag.clienteId === clienteId);
   const horarios = buildTimeBoundaries();
@@ -87,6 +96,7 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
   }
 
   function handleServicoCatalogoChange(key: string, servicoId: string) {
+    if (travado) return;
     if (servicoId === "") {
       atualizarLinha(key, { servicoId: "", nomePt: "", nomeEn: "" });
       return;
@@ -101,10 +111,12 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
   }
 
   function adicionarLinha() {
+    if (travado) return;
     setLinhas((prev) => [...prev, novaLinha()]);
   }
 
   function removerLinha(key: string) {
+    if (travado) return;
     setLinhas((prev) => (prev.length > 1 ? prev.filter((linha) => linha.key !== key) : prev));
   }
 
@@ -146,6 +158,11 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
       nomeEn: linha.nomeEn.trim(),
       valor: Number(linha.valor),
     }));
+    // Reforço defensivo: os campos de valor/desconto ficam desabilitados na UI quando `travado`,
+    // mas o total enviado ao servidor é sempre recomputado a partir do atendimento original nesse
+    // caso — nunca confia só no atributo `disabled` do input.
+    const descontoFinal = travado ? (atendimento?.desconto ?? 0) : Number(desconto) || 0;
+    const servicosFinais = travado ? (atendimento?.servicos ?? []) : servicosRealizados;
 
     const atendimentoBase: Atendimento = atendimento ?? {
       // Identificador definitivo (padrão ATD-000001) é gerado pelo AtendimentosProvider ao cadastrar.
@@ -176,8 +193,8 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
       profissional: profissional.trim(),
       data: formatDateMMDDYYYY(parseDateISO(dataIso)),
       horarioInicio: formatMinutesAsTime(inicioMin),
-      servicos: servicosRealizados,
-      desconto: descontoNum,
+      servicos: servicosFinais,
+      desconto: descontoFinal,
       observacoesPt: observacoesPt.trim(),
       observacoesEn: observacoesEn.trim(),
       retornoSugeridoDias: retornoSugeridoDias.trim() === "" ? null : Number(retornoSugeridoDias),
@@ -278,6 +295,13 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
             </select>
           </label>
 
+          {travado && (
+            <div className="flex items-start gap-2 rounded-xl border border-status-aguardando/30 bg-status-aguardando/10 px-3 py-2.5 text-sm text-foreground/80">
+              <AlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-status-aguardando" />
+              <span>{f.financasTravadas}</span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-3">
             <p className="text-sm font-semibold text-foreground">{f.servicosRealizados}</p>
             {linhas.map((linha) => (
@@ -286,7 +310,8 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
                   <select
                     value={linha.servicoId}
                     onChange={(event) => handleServicoCatalogoChange(linha.key, event.target.value)}
-                    className={inputClass}
+                    disabled={travado}
+                    className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     <option value="">{f.servicoAvulso}</option>
                     {servicosAtivos.map((servico) => (
@@ -299,7 +324,8 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
                     <button
                       type="button"
                       onClick={() => removerLinha(linha.key)}
-                      className="flex shrink-0 items-center justify-center rounded-full border border-border p-2 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+                      disabled={travado}
+                      className="flex shrink-0 items-center justify-center rounded-full border border-border p-2 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
                       aria-label={f.removerServico}
                     >
                       <CloseIcon className="h-3.5 w-3.5" />
@@ -312,7 +338,8 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
                     value={linha.nomePt}
                     onChange={(event) => atualizarLinha(linha.key, { nomePt: event.target.value })}
                     placeholder={f.nomeServicoAvulso}
-                    className={inputClass}
+                    disabled={travado}
+                    className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                   />
                 )}
                 <input
@@ -322,14 +349,16 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
                   value={linha.valor}
                   onChange={(event) => atualizarLinha(linha.key, { valor: event.target.value })}
                   placeholder={f.valorServico}
-                  className={inputClass}
+                  disabled={travado}
+                  className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                 />
               </div>
             ))}
             <button
               type="button"
               onClick={adicionarLinha}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+              disabled={travado}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
             >
               <PlusIcon className="h-4 w-4" />
               {f.adicionarServico}
@@ -338,7 +367,15 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
 
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-foreground/70">{f.desconto}</span>
-            <input type="number" min="0" step="0.01" value={desconto} onChange={(event) => setDesconto(event.target.value)} className={inputClass} />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={desconto}
+              onChange={(event) => setDesconto(event.target.value)}
+              disabled={travado}
+              className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
+            />
           </label>
 
           <label className="flex flex-col gap-1.5">

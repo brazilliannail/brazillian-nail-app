@@ -506,6 +506,8 @@ export const dictionary = {
         observacoesPlaceholder: "Opcional",
         retornoSugeridoDias: "Retorno sugerido (dias)",
         retornoSugeridoPlaceholder: "Opcional",
+        financasTravadas:
+          "Este atendimento já foi concluído: serviço, valor e desconto não podem mais ser alterados. Para corrigir um valor, registre uma correção de lançamento no Financeiro.",
         erros: {
           clienteObrigatoria: "Selecione uma cliente.",
           profissionalObrigatoria: "Informe a profissional responsável.",
@@ -1431,6 +1433,8 @@ export const dictionary = {
         observacoesPlaceholder: "Optional",
         retornoSugeridoDias: "Suggested return (days)",
         retornoSugeridoPlaceholder: "Optional",
+        financasTravadas:
+          "This appointment is already completed: service, amount, and discount can no longer be changed. To correct an amount, record a ledger correction in Financials instead.",
         erros: {
           clienteObrigatoria: "Select a client.",
           profissionalObrigatoria: "Enter the responsible professional.",
