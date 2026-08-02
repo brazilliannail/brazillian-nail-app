@@ -24,6 +24,9 @@ type AgendaDetailsPanelProps = {
   onClose: () => void;
   onUpdateStatus: (id: string, status: StatusKey) => void;
   onReagendar: () => void;
+  /** Abre o formulário de "Novo agendamento" em branco — usado por `naoCompareceu`, que não pode
+   * reaproveitar o registro atual (preserva o histórico da falta). */
+  onNovoAgendamento: () => void;
   onEdit: () => void;
   /** Abre o atendimento deste agendamento — cria se ainda não existir, senão só direciona. */
   onIniciarAtendimento: () => void;
@@ -37,6 +40,7 @@ export function AgendaDetailsPanel({
   onClose,
   onUpdateStatus,
   onReagendar,
+  onNovoAgendamento,
   onEdit,
   onIniciarAtendimento,
   iniciandoAtendimento,
@@ -192,11 +196,15 @@ export function AgendaDetailsPanel({
             <DoubleCheckIcon className="h-4 w-4" />
             {d.acoes.abrirAtendimento}
           </button>
-        ) : (
+        ) : status === "cancelado" ? (
           <button type="button" onClick={onReagendar} className={`col-span-2 ${acaoBotaoClasses}`}>
-            {d.acoes.reagendar}
+            {d.acoes.reativarEReagendar}
           </button>
-        )}
+        ) : status === "naoCompareceu" ? (
+          <button type="button" onClick={onNovoAgendamento} className={`col-span-2 ${acaoBotaoClasses}`}>
+            {d.acoes.criarNovoAgendamento}
+          </button>
+        ) : null}
 
         <button type="button" onClick={onEdit} className={`col-span-2 ${acaoBotaoClasses}`}>
           <EditIcon className="h-4 w-4" />

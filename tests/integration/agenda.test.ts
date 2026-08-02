@@ -11,6 +11,7 @@ import {
   reagendarAgendamentoAction,
 } from "@/lib/agenda-actions";
 import { getAgendamentos } from "@/lib/agenda-repo";
+import { prisma } from "@/lib/db";
 import { criarClienteTeste } from "../helpers/ledger-fixtures";
 import { proximaDataAgendaTeste } from "../helpers/agenda-fixtures";
 
@@ -292,4 +293,58 @@ describe("agenda (agenda-actions + agenda-repo)", () => {
       reagendarAgendamentoAction(paraReagendar.id, outraData, 9 * 60, 10 * 60),
     ).rejects.toThrow("Já existe um agendamento nesse horário.");
   });
+
+  it("reagenda um agendamento cancelado e reativa o status para aguardando", async () => {
+    const cliente = await criarClienteTeste();
+    const dataOriginal = proximaDataAgendaTeste();
+    const novaData = proximaDataAgendaTeste();
+
+    const criado = await createAgendamentoAction({
+      clienteId: cliente.id,
+      servicoId: null,
+      status: "aguardando",
+      data: dataOriginal,
+      inicioMin: 9 * 60,
+      fimMin: 10 * 60,
+      valorEstimado: null,
+      observacoesPt: "",
+      observacoesEn: "",
+    });
+    await updateStatusAgendamentoAction(criado.id, "cancelado");
+
+    const reagendado = await reagendarAgendamentoAction(criado.id, novaData, 14 * 60, 15 * 60);
+
+    expect(reagendado.status).toBe("aguardando");
+    expect(reagendado.data).toBe(novaData);
+    expect(reagendado.inicioMin).toBe(14 * 60);
+  });
+
+  it.each(["emAtendimento", "concluido", "naoCompareceu"] as const)(
+    "rejeita reagendar um agendamento com status %s",
+    async (status) => {
+      const cliente = await criarClienteTeste();
+      const data = proximaDataAgendaTeste();
+      const novaData = proximaDataAgendaTeste();
+
+      const criado = await createAgendamentoAction({
+        clienteId: cliente.id,
+        servicoId: null,
+        status: "aguardando",
+        data,
+        inicioMin: 9 * 60,
+        fimMin: 10 * 60,
+        valorEstimado: null,
+        observacoesPt: "",
+        observacoesEn: "",
+      });
+      // emAtendimento/concluido só nascem via sincronização do fluxo de Atendimentos; status
+      // setado direto no banco aqui (para os 3 casos, por uniformidade) só para isolar o
+      // comportamento de reagendarAgendamentoAction em si, sem depender de outra action.
+      await prisma.agendamento.update({ where: { id: criado.id }, data: { status } });
+
+      await expect(
+        reagendarAgendamentoAction(criado.id, novaData, 14 * 60, 15 * 60),
+      ).rejects.toThrow(`Não é possível reagendar um agendamento com status "${status}".`);
+    },
+  );
 });

@@ -143,7 +143,17 @@ export async function updateStatusAgendamentoAction(id: string, status: StatusKe
   return mapAgendamentoRow(row);
 }
 
-/** Reagenda um agendamento existente para nova data/horário, validando expediente e conflito. */
+/**
+ * Status de origem a partir dos quais reagendar é permitido (PROJECT_STATUS.md §13 item 1):
+ * `aguardando`/`confirmado` mantêm o status; `cancelado` é reativado para `aguardando` ao
+ * reagendar ("reativar e reagendar"). `emAtendimento`/`concluido` nunca reagendam por aqui —
+ * já têm um Atendimento formal vinculado. `naoCompareceu` também fica de fora: reaproveitar o
+ * mesmo registro apagaria o histórico da falta; a UI deve levar à criação de um novo agendamento.
+ */
+const STATUS_REAGENDAVEIS = new Set<StatusKey>(["aguardando", "confirmado", "cancelado"]);
+
+/** Reagenda um agendamento existente para nova data/horário, validando expediente, conflito e
+ * status de origem. Reativa `cancelado` para `aguardando` ao reagendar. */
 export async function reagendarAgendamentoAction(
   id: string,
   novaData: string,
@@ -157,6 +167,10 @@ export async function reagendarAgendamentoAction(
     throw new Error("Agendamento não encontrado.");
   }
 
+  if (!STATUS_REAGENDAVEIS.has(existente.status as StatusKey)) {
+    throw new Error(`Não é possível reagendar um agendamento com status "${existente.status}".`);
+  }
+
   const dataIso = mmddyyyyToISO(novaData);
 
   if (await existeConflito(dataIso, novoInicioMin, novoFimMin, id)) {
@@ -165,7 +179,12 @@ export async function reagendarAgendamentoAction(
 
   const row = await prisma.agendamento.update({
     where: { id },
-    data: { data: dataIso, inicioMin: novoInicioMin, fimMin: novoFimMin },
+    data: {
+      data: dataIso,
+      inicioMin: novoInicioMin,
+      fimMin: novoFimMin,
+      status: existente.status === "cancelado" ? "aguardando" : existente.status,
+    },
   });
 
   revalidatePath("/", "layout");

@@ -244,6 +244,7 @@ export default function AgendaPage() {
             onClose={() => setSelectedId(null)}
             onUpdateStatus={updateAppointmentStatus}
             onReagendar={() => setReagendarAberto(true)}
+            onNovoAgendamento={() => setFormState({ modo: "criar" })}
             onEdit={() => setFormState({ modo: "editar", agendamento: selectedAppointment })}
             onIniciarAtendimento={() => handleIniciarAtendimento(selectedAppointment.id)}
             iniciandoAtendimento={iniciandoAtendimento}
@@ -266,6 +267,7 @@ export default function AgendaPage() {
               onClose={() => setSelectedId(null)}
               onUpdateStatus={updateAppointmentStatus}
               onReagendar={() => setReagendarAberto(true)}
+              onNovoAgendamento={() => setFormState({ modo: "criar" })}
               onEdit={() => setFormState({ modo: "editar", agendamento: selectedAppointment })}
               onIniciarAtendimento={() => handleIniciarAtendimento(selectedAppointment.id)}
               iniciandoAtendimento={iniciandoAtendimento}

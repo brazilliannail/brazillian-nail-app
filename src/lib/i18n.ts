@@ -89,6 +89,8 @@ export const dictionary = {
           marcarNaoCompareceu: "Marcar como não compareceu",
           abrirWhatsapp: "Abrir WhatsApp",
           reagendar: "Reagendar",
+          reativarEReagendar: "Reativar e reagendar",
+          criarNovoAgendamento: "Criar novo agendamento",
           cancelar: "Cancelar",
         },
         atendimentoIniciado: {
@@ -1016,6 +1018,8 @@ export const dictionary = {
           marcarNaoCompareceu: "Mark as no-show",
           abrirWhatsapp: "Open WhatsApp",
           reagendar: "Reschedule",
+          reativarEReagendar: "Reactivate and reschedule",
+          criarNovoAgendamento: "Create new appointment",
           cancelar: "Cancel",
         },
         atendimentoIniciado: {

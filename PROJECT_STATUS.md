@@ -133,10 +133,10 @@ Suíte completa (`npm test`) rodada após as duas correções: **42/42 testes pa
 
 **Itens levantados na auditoria que ficaram de fora desta etapa por dependerem de decisão de negócio (aguardando definição do usuário antes de codar):**
 - ~~Edição de serviços/desconto em atendimento `finalizadoCortesia`/`finalizadoPendente` sem pagamento registrado (valor pode "sumir" sem virar pendência visível).~~ **RESOLVIDO em 2026-08-02** — ver §12.
-- `reagendarAgendamentoAction` permite reagendar agendamento em qualquer status, incluindo `cancelado`/`concluido`/`naoCompareceu` — hoje a UI expõe o botão "Reagendar" nesses estados de propósito; precisa decisão se isso é regra válida ou bug.
-- Atendimentos `estornado` contando (ou não) em Valor de Serviços/Qtd. Atendimentos/Ticket Médio do Financeiro — código diverge do que `DASHBOARD_DESIGN.md` (decisão D3) documenta.
-- Horário de expediente configurado em Configurações não é lido pela validação real da Agenda (que usa constantes fixas 8h–18h).
-- "Ocultar valores" (olho no Header) só afeta 3 cards da Home, não o Dashboard Financeiro inteiro.
+- ~~`reagendarAgendamentoAction` permite reagendar agendamento em qualquer status, incluindo `cancelado`/`concluido`/`naoCompareceu` — hoje a UI expõe o botão "Reagendar" nesses estados de propósito; precisa decisão se isso é regra válida ou bug.~~ **DECIDIDO em 2026-08-02, implementação pendente** — ver §13 item 1.
+- ~~Atendimentos `estornado` contando (ou não) em Valor de Serviços/Qtd. Atendimentos/Ticket Médio do Financeiro — código diverge do que `DASHBOARD_DESIGN.md` (decisão D3) documenta.~~ **DECIDIDO em 2026-08-02, implementação pendente** — ver §13 item 2.
+- ~~Horário de expediente configurado em Configurações não é lido pela validação real da Agenda (que usa constantes fixas 8h–18h).~~ **DECIDIDO em 2026-08-02, implementação pendente** — ver §13 item 3.
+- ~~"Ocultar valores" (olho no Header) só afeta 3 cards da Home, não o Dashboard Financeiro inteiro.~~ **DECIDIDO em 2026-08-02, implementação pendente** — ver §13 item 4.
 - Validação server-side de telefone, faixa de `precoPadrao`/`duracaoPadrao` de Serviço fora do mínimo/máximo, ausência de CHECK constraints em `servicos`, entre outros itens de menor prioridade — ver relatório completo entregue ao usuário nesta sessão.
 
 Nenhum desses itens foi alterado. Nenhuma configuração de Git foi tocada; `git push` continua pendente por decisão do usuário (autenticação do GitHub a ser resolvida depois).
@@ -177,3 +177,37 @@ Item de decisão de negócio flagrado no §10/§11 (item 1 da lista de itens pen
 **Testado** em `tests/integration/atendimentos-edicao.test.ts` (6 cenários novos): edição livre em `emAndamento`; `finalizadoPendente` sem nenhum pagamento real já travado (a lacuna fechada); `finalizadoCortesia` sem pagamento real também travado; `finalizadoPago` com pagamento real — total travado, mas recomposição da lista de serviços com soma idêntica é aceita; desconto — qualquer mudança que altere o total é rejeitada, mesmo valor é aceito; `cancelado` continua bloqueado até para campos não financeiros. Verificado também manualmente no browser (atendimento `finalizadoPago` de Maria Costa): banner aparece, campos de serviço/valor/desconto ficam `disabled` (confirmado via inspeção do DOM), edição de observações salva normalmente sem alterar o valor total devido/saldo pendente.
 
 Suíte completa rodada após a mudança: **57/57 testes passando** (51 anteriores + 6 novos). `tsc --noEmit` limpo. `npm run lint`: 0 erros, mesmos 8 warnings pré-existentes.
+
+---
+
+## 13. Decisões de negócio aprovadas (2026-08-02) — pendências do §10
+
+As quatro decisões de negócio deixadas em aberto no §10 foram apresentadas ao usuário (regra atual, opções, vantagens/riscos e recomendação técnica para cada uma) e **aprovadas nesta data**. Nenhum código foi alterado ainda — só este documento, para registrar a regra combinada antes da implementação. Plano de implementação (arquivos, testes, riscos, ordem) apresentado ao usuário separadamente, aguardando autorização para codar.
+
+1. **Reagendamento de agendamento** (`reagendarAgendamentoAction`, `src/lib/agenda-actions.ts`) — regra aprovada:
+   - `aguardando` → pode reagendar (mantém status).
+   - `confirmado` → pode reagendar (mantém status).
+   - `cancelado` → pode "reativar e reagendar": ação passa a alterar também o `status` para `aguardando`, além de `data`/`inicioMin`/`fimMin`.
+   - `emAtendimento` → não pode reagendar.
+   - `concluido` → não pode reagendar.
+   - `naoCompareceu` → não pode reagendar o mesmo registro; a UI deve direcionar para criar um **novo** agendamento (preserva o histórico da falta em vez de reescrevê-lo).
+   - **Implementação pendente.**
+
+2. **Atendimentos estornados no Financeiro** (`STATUS_ATENDIMENTO_REALIZADO`, `financeiro-service.ts`) — regra aprovada:
+   - Atendimento `estornado` continua existindo no histórico operacional (não é ocultado/excluído de listagens).
+   - O valor estornado **não** compõe `Valor de Serviços`, nem `Quantidade de Atendimentos`/`Ticket Médio` líquidos — alinha o código a `DASHBOARD_DESIGN.md` (D3), que já documentava essa exclusão.
+   - Novo indicador **"Estornos do período"**, com quantidade e valor, para não perder visibilidade do que foi revertido.
+   - `Total Recebido` (caixa) continua líquido de estorno, via `pagamentos` (comportamento já correto hoje, sem mudança).
+   - **Implementação pendente.**
+
+3. **Horário de expediente em Configurações** (`agendaHorarioAbertura`/`agendaHorarioFechamento`/`agendaDiasFuncionamento`/`agendaBloqueioConflito`/`agendaPermitirEncaixe`, hoje persistidos mas não lidos pela Agenda) — regra aprovada:
+   - A Agenda passa a validar horário e dia de funcionamento a partir dos valores gravados em Configurações, não mais das constantes fixas `DAY_START_MIN`/`DAY_END_MIN` (8h–18h) de `agenda-mock.ts`.
+   - A mesma fonte de dados alimenta tanto a validação de servidor (`validarHorario`) quanto a geração visual dos slots da grade — nunca duas fontes divergentes.
+   - `agendaBloqueioConflito` e `agendaPermitirEncaixe` (campos já existentes na tabela `configuracoes`, sem consumidor hoje) passam a ser efetivamente respeitados pela Agenda.
+   - **Implementação pendente.**
+
+4. **Alcance de "Ocultar valores"** (`FinancialVisibilityProvider`, hoje só usado em `src/app/page.tsx`) — regra aprovada:
+   - Passa a ocultar informação financeira sensível também em todo o Dashboard Financeiro (`/financeiro`), não só nos 3 cards da Home.
+   - Abrange StatCards, `FormaPagamentoBars`, listas de recebimentos/pendências e o detalhamento financeiro — inclusive dentro do `FinanceiroDetailsPanel` enquanto aberto.
+   - **Não** se estende a preços de catálogo em Serviços, valores operacionais da Agenda, Clientes ou qualquer outra tela não financeira — escopo continua sendo Home + Dashboard Financeiro.
+   - **Implementação pendente.**
