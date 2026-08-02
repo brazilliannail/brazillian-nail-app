@@ -114,11 +114,28 @@ export async function updateAgendamentoAction(agendamento: AgendaAppointment): P
   return mapAgendamentoRow(row);
 }
 
-/** Altera apenas o status de um agendamento (confirmar, iniciar, concluir, cancelar, etc.). */
+/**
+ * Transições de status permitidas por esta action, refletindo exatamente o que a UI da Agenda
+ * expõe (`AgendaDetailsPanel`): aguardando → confirmado/cancelado/naoCompareceu, confirmado →
+ * cancelado/naoCompareceu. "emAtendimento" e "concluido" nunca são setados por aqui — nascem da
+ * sincronização feita por `atendimentos-actions.ts` ao iniciar/concluir/cancelar um atendimento.
+ * Estados terminais (concluido, cancelado, naoCompareceu) não têm transição de saída aqui.
+ */
+const TRANSICOES_STATUS_AGENDAMENTO: Partial<Record<StatusKey, StatusKey[]>> = {
+  aguardando: ["confirmado", "cancelado", "naoCompareceu"],
+  confirmado: ["cancelado", "naoCompareceu"],
+};
+
+/** Altera apenas o status de um agendamento (confirmar, cancelar, marcar não compareceu). */
 export async function updateStatusAgendamentoAction(id: string, status: StatusKey): Promise<AgendaAppointment> {
   const existente = await prisma.agendamento.findUnique({ where: { id } });
   if (!existente) {
     throw new Error("Agendamento não encontrado.");
+  }
+
+  const permitido = TRANSICOES_STATUS_AGENDAMENTO[existente.status as StatusKey]?.includes(status) ?? false;
+  if (!permitido) {
+    throw new Error(`Não é possível mudar o status de "${existente.status}" para "${status}".`);
   }
 
   const row = await prisma.agendamento.update({ where: { id }, data: { status } });

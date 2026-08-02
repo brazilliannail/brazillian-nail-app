@@ -126,6 +126,8 @@ export function getCompareRange(
       return null;
 
     case "ontem":
+      return { start: addDays(mainRange.start, -1), end: addDays(mainRange.end, -1) };
+
     case "semanaPassada":
       return { start: addDays(mainRange.start, -7), end: addDays(mainRange.end, -7) };
 

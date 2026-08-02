@@ -119,3 +119,24 @@ Nestes 8 módulos, **nenhum dado fictício resta** e toda escrita passa por Serv
 5. ~~**Configurações sem persistência real**~~ **RESOLVIDO em 2026-07-30** — ver §3 e §8 item 4.
 6. **Sem estratégia de backup do banco SQLite** — um disco corrompido ou arquivo apagado por engano perde todo o histórico financeiro e de clientes, sem cópia de segurança automatizada.
 7. **Ausência de autenticação** — aceitável hoje (app single-user local), mas é uma decisão que precisa ser reafirmada explicitamente antes da v1.0, não assumida como permanente — especialmente se o app rodar em qualquer rede compartilhada ou dispositivo não exclusivo da profissional.
+
+---
+
+## 10. Auditoria completa de fluxos existentes (2026-08-02)
+
+Auditoria somente leitura de todos os fluxos (Clientes, Serviços, Agenda, Atendimentos/Pagamentos, Financeiro, Lembretes/Home, Configurações), feita antes de qualquer alteração — suíte completa (42 testes) rodada e código dos fluxos sem teste (Financeiro, Configurações, Home) revisado manualmente. Resultado completo revisado com o usuário; duas correções técnicas (sem decisão de negócio envolvida) foram autorizadas e aplicadas nesta sessão:
+
+- **CORRIGIDO — comparação "Ontem" no Financeiro** (`src/lib/financeiro-comparacao.ts`, case `"ontem"`): calculava `-7` dias (código copiado do case `"mesmoDiaSemanaPassada"`) em vez de `-1` dia. Como "Ontem" é a comparação padrão do período "Hoje" (`COMPARACAO_PADRAO_POR_PERIODO.hoje`), todo StatCard do Dashboard Financeiro exibia, ao abrir a tela, um valor de uma semana atrás rotulado como "Ontem". Agora `case "ontem"` usa `addDays(..., -1)`, separado de `case "semanaPassada"` (que continua em `-7`, correto).
+- **CORRIGIDO — validação de transições de status na Agenda** (`src/lib/agenda-actions.ts`, `updateStatusAgendamentoAction`): antes aceitava qualquer `StatusKey` para qualquer agendamento existente, sem checar o status atual (permitia, por exemplo, forçar `cancelado → aguardando` ou pular direto para `concluido` sem nunca ter passado por um Atendimento). Agora usa um mapa explícito de transições permitidas (`TRANSICOES_STATUS_AGENDAMENTO`), espelhando exatamente o que a UI (`AgendaDetailsPanel`) já expõe — `aguardando → confirmado/cancelado/naoCompareceu`, `confirmado → cancelado/naoCompareceu` — no mesmo padrão defensivo (checar status de origem antes de mutar) já usado em `atendimentos-actions.ts` (`concluirAtendimentoAction`, `cancelarAtendimentoAction`, `estornarAtendimentoAction`). `emAtendimento`/`concluido` continuam fora do alcance desta action, pois nascem só da sincronização feita pelo fluxo de Atendimentos.
+
+Suíte completa (`npm test`) rodada após as duas correções: **42/42 testes passando**, nenhum quebrado (os dois usos de `updateStatusAgendamentoAction` nos testes — `aguardando→cancelado` e `aguardando→confirmado` — já eram transições válidas no novo mapa). `tsc --noEmit` limpo.
+
+**Itens levantados na auditoria que ficaram de fora desta etapa por dependerem de decisão de negócio (aguardando definição do usuário antes de codar):**
+- Edição de serviços/desconto em atendimento `finalizadoCortesia`/`finalizadoPendente` sem pagamento registrado (valor pode "sumir" sem virar pendência visível).
+- `reagendarAgendamentoAction` permite reagendar agendamento em qualquer status, incluindo `cancelado`/`concluido`/`naoCompareceu` — hoje a UI expõe o botão "Reagendar" nesses estados de propósito; precisa decisão se isso é regra válida ou bug.
+- Atendimentos `estornado` contando (ou não) em Valor de Serviços/Qtd. Atendimentos/Ticket Médio do Financeiro — código diverge do que `DASHBOARD_DESIGN.md` (decisão D3) documenta.
+- Horário de expediente configurado em Configurações não é lido pela validação real da Agenda (que usa constantes fixas 8h–18h).
+- "Ocultar valores" (olho no Header) só afeta 3 cards da Home, não o Dashboard Financeiro inteiro.
+- Validação server-side de telefone, faixa de `precoPadrao`/`duracaoPadrao` de Serviço fora do mínimo/máximo, ausência de CHECK constraints em `servicos`, entre outros itens de menor prioridade — ver relatório completo entregue ao usuário nesta sessão.
+
+Nenhum desses itens foi alterado. Nenhuma configuração de Git foi tocada; `git push` continua pendente por decisão do usuário (autenticação do GitHub a ser resolvida depois).
