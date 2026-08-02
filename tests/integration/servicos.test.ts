@@ -10,6 +10,7 @@ import {
   toggleStatusServicoAction,
 } from "@/lib/servicos-actions";
 import { getServicos } from "@/lib/servicos-repo";
+import { prisma } from "@/lib/db";
 
 let contador = 0;
 function proximoSufixo() {
@@ -284,5 +285,41 @@ describe("serviços (servicos-actions + servicos-repo)", () => {
 
     const reativado = await toggleStatusServicoAction(criado.id);
     expect(reativado.status).toBe("ativo");
+  });
+
+  describe("CHECK constraints da tabela servicos (rede de segurança no banco, abaixo da validação de servicos-actions.ts)", () => {
+    async function inserirServicoBruto(overrides: { precoPadrao?: number; duracaoPadraoMin?: number }) {
+      const sufixo = proximoSufixo();
+      const agregado = await prisma.servico.aggregate({ _max: { numeroSequencial: true } });
+      const numeroSequencial = (agregado._max.numeroSequencial ?? 0) + 1;
+      return prisma.servico.create({
+        data: {
+          id: `SRV-CHECK-${sufixo}`,
+          numeroSequencial,
+          nomePt: `Serviço CHECK ${sufixo}`,
+          categoria: "Manicure",
+          precoPadrao: overrides.precoPadrao ?? 45,
+          duracaoPadraoMin: overrides.duracaoPadraoMin ?? 45,
+        },
+      });
+    }
+
+    it("rejeita preço negativo mesmo gravando direto via Prisma (fora de servicos-actions.ts)", async () => {
+      await expect(inserirServicoBruto({ precoPadrao: -10 })).rejects.toThrow();
+    });
+
+    it("rejeita duração zero mesmo gravando direto via Prisma", async () => {
+      await expect(inserirServicoBruto({ duracaoPadraoMin: 0 })).rejects.toThrow();
+    });
+
+    it("rejeita duração negativa mesmo gravando direto via Prisma", async () => {
+      await expect(inserirServicoBruto({ duracaoPadraoMin: -30 })).rejects.toThrow();
+    });
+
+    it("continua aceitando preço e duração válidos gravados direto via Prisma", async () => {
+      const criado = await inserirServicoBruto({ precoPadrao: 0, duracaoPadraoMin: 15 });
+      expect(criado.precoPadrao).toBe(0);
+      expect(criado.duracaoPadraoMin).toBe(15);
+    });
   });
 });

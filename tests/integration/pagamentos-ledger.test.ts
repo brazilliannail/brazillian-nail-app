@@ -10,6 +10,8 @@ import {
   concluirAtendimentoAction,
   registrarPagamentoAdicionalAction,
   estornarAtendimentoAction,
+  corrigirLancamentoAction,
+  corrigirLancamentosAction,
 } from "@/lib/atendimentos-actions";
 import { saldoPendente, valorTotalDevido } from "@/lib/atendimentos-mock";
 import { getAtendimentos } from "@/lib/atendimentos-repo";
@@ -208,5 +210,108 @@ describe("ledger de pagamentos (atendimentos-actions + pagamentos-repo)", () => 
     // valorTotalDevido/saldoPendente batem também a partir da leitura direta do banco (mapAtendimentoRow).
     const pendenciaRecenteAtendimento = atendimentos.find((a) => a.id === pendenciaRecente.id)!;
     expect(valorTotalDevido(pendenciaRecenteAtendimento)).toBe(80);
+  });
+
+  it("corrigirLancamentosAction: corrige serviço e gorjeta juntos, atomicamente, numa única transação", async () => {
+    const cliente = await criarClienteTeste();
+    const atendimento = await criarAtendimentoTeste({ clienteId: cliente.id, valorServico: 100 });
+
+    const { atendimento: concluido } = await concluirAtendimentoAction(atendimento.id, {
+      horarioFim: "11:00 AM",
+      duracaoMin: 60,
+      valorRecebido: 100,
+      gorjeta: 30,
+      formaPagamento: "dinheiro",
+      status: "finalizadoPago",
+    });
+
+    const pagamentoServico = await prisma.pagamento.findFirstOrThrow({
+      where: { atendimentoId: concluido.id, natureza: "servico", tipo: "entrada" },
+    });
+    const pagamentoGorjeta = await prisma.pagamento.findFirstOrThrow({
+      where: { atendimentoId: concluido.id, natureza: "gorjeta", tipo: "entrada" },
+    });
+
+    const [resultadoServico, resultadoGorjeta] = await corrigirLancamentosAction([
+      { pagamentoId: pagamentoServico.id, dados: { valor: 90, formaPagamento: "cartaoCredito" } },
+      { pagamentoId: pagamentoGorjeta.id, dados: { valor: 20, formaPagamento: "cartaoCredito" } },
+    ]);
+
+    expect(resultadoServico.novosLancamentos).toHaveLength(2);
+    expect(resultadoGorjeta.novosLancamentos).toHaveLength(2);
+
+    const corrigido = (await getAtendimentos()).find((a) => a.id === concluido.id)!;
+    expect(corrigido.valorRecebido).toBe(90);
+    expect(corrigido.gorjeta).toBe(20);
+    expect(corrigido.status).toBe("finalizadoParcial");
+
+    const todosPagamentos = await prisma.pagamento.findMany({ where: { atendimentoId: concluido.id } });
+    // 2 originais + 2 estornos + 2 entradas corrigidas.
+    expect(todosPagamentos).toHaveLength(6);
+  });
+
+  it("corrigirLancamentosAction: se uma das correções falhar, nenhuma é gravada (nada fica parcialmente corrigido)", async () => {
+    const cliente = await criarClienteTeste();
+    const atendimento = await criarAtendimentoTeste({ clienteId: cliente.id, valorServico: 100 });
+
+    const { atendimento: concluido } = await concluirAtendimentoAction(atendimento.id, {
+      horarioFim: "11:00 AM",
+      duracaoMin: 60,
+      valorRecebido: 100,
+      gorjeta: 30,
+      formaPagamento: "dinheiro",
+      status: "finalizadoPago",
+    });
+
+    const pagamentoServico = await prisma.pagamento.findFirstOrThrow({
+      where: { atendimentoId: concluido.id, natureza: "servico", tipo: "entrada" },
+    });
+    const pagamentoGorjeta = await prisma.pagamento.findFirstOrThrow({
+      where: { atendimentoId: concluido.id, natureza: "gorjeta", tipo: "entrada" },
+    });
+
+    const antes = await prisma.pagamento.findMany({ where: { atendimentoId: concluido.id } });
+
+    // Correção da gorjeta é válida isoladamente, mas a do serviço excede o valor devido do
+    // atendimento (100) — deve reverter as duas, mesmo a gorjeta tendo sido processada antes.
+    await expect(
+      corrigirLancamentosAction([
+        { pagamentoId: pagamentoGorjeta.id, dados: { valor: 20, formaPagamento: "cartaoCredito" } },
+        { pagamentoId: pagamentoServico.id, dados: { valor: 500, formaPagamento: "cartaoCredito" } },
+      ]),
+    ).rejects.toThrow(/excede o saldo devido/);
+
+    const depois = await prisma.pagamento.findMany({ where: { atendimentoId: concluido.id } });
+    expect(depois).toHaveLength(antes.length);
+
+    const atendimentoInalterado = (await getAtendimentos()).find((a) => a.id === concluido.id)!;
+    expect(atendimentoInalterado.valorRecebido).toBe(100);
+    expect(atendimentoInalterado.gorjeta).toBe(30);
+  });
+
+  it("corrigirLancamentoAction (correção única) continua funcionando isoladamente", async () => {
+    const cliente = await criarClienteTeste();
+    const atendimento = await criarAtendimentoTeste({ clienteId: cliente.id, valorServico: 100 });
+
+    const { atendimento: concluido } = await concluirAtendimentoAction(atendimento.id, {
+      horarioFim: "11:00 AM",
+      duracaoMin: 60,
+      valorRecebido: 100,
+      gorjeta: 0,
+      formaPagamento: "dinheiro",
+      status: "finalizadoPago",
+    });
+
+    const pagamentoServico = await prisma.pagamento.findFirstOrThrow({
+      where: { atendimentoId: concluido.id, natureza: "servico", tipo: "entrada" },
+    });
+
+    const resultado = await corrigirLancamentoAction(pagamentoServico.id, {
+      valor: 80,
+      formaPagamento: "zelle",
+    });
+
+    expect(resultado.atendimento.valorRecebido).toBe(80);
+    expect(resultado.atendimento.status).toBe("finalizadoParcial");
   });
 });

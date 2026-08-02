@@ -666,6 +666,114 @@ export type CorrigirLancamentoResultado = {
   novosLancamentos: NovoLancamentoCaixa[];
 };
 
+/** Núcleo de `corrigirLancamentoAction`, executado dentro de uma transação já aberta pelo
+ * chamador — permite que `corrigirLancamentosAction` aplique várias correções (ex.: serviço +
+ * gorjeta do mesmo atendimento) atomicamente, na mesma transação SQLite. */
+async function executarCorrecaoLancamento(
+  tx: Tx,
+  pagamentoId: string,
+  dadosCorretos: CorrigirLancamentoDados,
+): Promise<CorrigirLancamentoResultado> {
+  if (dadosCorretos.valor <= 0) {
+    throw new Error("O valor corrigido não pode ser negativo.");
+  }
+
+  const original = await tx.pagamento.findUnique({ where: { id: pagamentoId } });
+  if (!original) {
+    throw new Error("Lançamento não encontrado.");
+  }
+  if (original.tipo !== "entrada") {
+    throw new Error("Não é possível corrigir um estorno.");
+  }
+
+  const existente = await tx.atendimento.findUniqueOrThrow({
+    where: { id: original.atendimentoId },
+    include: { servicos: true, pagamentos: true },
+  });
+  if (existente.status === "cancelado") {
+    throw new Error("Não é possível corrigir lançamento de atendimento cancelado.");
+  }
+
+  const restante = valorRestanteDeEntrada(existente.pagamentos, original.id, original.valor);
+  if (restante <= 0) {
+    throw new Error("Este lançamento já foi totalmente estornado.");
+  }
+
+  const devido = existente.servicos.reduce((total, servico) => total + servico.valor, 0) - existente.desconto;
+  if (original.natureza === "servico") {
+    const recebidoSemEsteLancamento = calcularValorRecebidoServico(existente.pagamentos) - restante;
+    if (recebidoSemEsteLancamento + dadosCorretos.valor > devido) {
+      throw new Error(
+        `O valor corrigido excede o saldo devido do atendimento ($${(devido - recebidoSemEsteLancamento).toFixed(2)} disponível).`,
+      );
+    }
+  }
+
+  // O estorno mantém a data do próprio lançamento sendo corrigido (não a data do atendimento
+  // nem "hoje") — é o lançamento específico que está sendo revertido, e ele pode ter sido
+  // registrado bem depois do atendimento (ver registrarPagamentoAdicionalAction).
+  const dataCorrecao = dadosCorretos.dataPagamento ? mmddyyyyToISO(dadosCorretos.dataPagamento) : original.dataPagamento;
+
+  const ids = await proximosPagamentoIds(tx, 2);
+  const lancamentos = [
+    {
+      id: ids[0].id,
+      numeroSequencial: ids[0].numeroSequencial,
+      atendimentoId: original.atendimentoId,
+      natureza: original.natureza,
+      tipo: "estorno" as const,
+      dataPagamento: original.dataPagamento,
+      valor: restante,
+      formaPagamento: original.formaPagamento,
+      observacoesPt: "",
+      observacoesEn: "",
+      estornaPagamentoId: original.id,
+    },
+    {
+      id: ids[1].id,
+      numeroSequencial: ids[1].numeroSequencial,
+      atendimentoId: original.atendimentoId,
+      natureza: original.natureza,
+      tipo: "entrada" as const,
+      dataPagamento: dataCorrecao,
+      valor: dadosCorretos.valor,
+      formaPagamento: dadosCorretos.formaPagamento,
+      observacoesPt: dadosCorretos.observacoesPt?.trim() ?? "",
+      observacoesEn: dadosCorretos.observacoesEn?.trim() ?? "",
+      estornaPagamentoId: original.id,
+    },
+  ];
+  await tx.pagamento.createMany({ data: lancamentos });
+
+  const status: AtendimentoStatus =
+    original.natureza === "servico"
+      ? calcularStatusAposRecebimento(
+          devido,
+          calcularValorRecebidoServico(existente.pagamentos) - restante + dadosCorretos.valor,
+        )
+      : (existente.status as AtendimentoStatus);
+
+  const row = await tx.atendimento.update({
+    where: { id: original.atendimentoId },
+    data: { status },
+    include: { servicos: true, pagamentos: true },
+  });
+
+  const novosLancamentos: NovoLancamentoCaixa[] = lancamentos.map((l) => ({
+    id: l.id,
+    atendimentoId: l.atendimentoId,
+    natureza: l.natureza as "servico" | "gorjeta",
+    tipo: l.tipo,
+    dataPagamento: l.dataPagamento,
+    valor: l.valor,
+    formaPagamento: l.formaPagamento as FormaPagamento | null,
+    observacoesPt: l.observacoesPt,
+    observacoesEn: l.observacoesEn,
+  }));
+
+  return { atendimento: mapAtendimentoRow(row), novosLancamentos };
+}
+
 /**
  * Corrige um lançamento específico do ledger (valor e/ou forma de pagamento errados) sem jamais
  * editar a linha original: estorna exatamente aquele lançamento — no valor ainda não estornado —
@@ -681,107 +789,28 @@ export async function corrigirLancamentoAction(
   pagamentoId: string,
   dadosCorretos: CorrigirLancamentoDados,
 ): Promise<CorrigirLancamentoResultado> {
-  if (dadosCorretos.valor <= 0) {
-    throw new Error("O valor corrigido não pode ser negativo.");
-  }
-
-  const resultado = await prisma.$transaction(async (tx) => {
-    const original = await tx.pagamento.findUnique({ where: { id: pagamentoId } });
-    if (!original) {
-      throw new Error("Lançamento não encontrado.");
-    }
-    if (original.tipo !== "entrada") {
-      throw new Error("Não é possível corrigir um estorno.");
-    }
-
-    const existente = await tx.atendimento.findUniqueOrThrow({
-      where: { id: original.atendimentoId },
-      include: { servicos: true, pagamentos: true },
-    });
-    if (existente.status === "cancelado") {
-      throw new Error("Não é possível corrigir lançamento de atendimento cancelado.");
-    }
-
-    const restante = valorRestanteDeEntrada(existente.pagamentos, original.id, original.valor);
-    if (restante <= 0) {
-      throw new Error("Este lançamento já foi totalmente estornado.");
-    }
-
-    const devido = existente.servicos.reduce((total, servico) => total + servico.valor, 0) - existente.desconto;
-    if (original.natureza === "servico") {
-      const recebidoSemEsteLancamento = calcularValorRecebidoServico(existente.pagamentos) - restante;
-      if (recebidoSemEsteLancamento + dadosCorretos.valor > devido) {
-        throw new Error(
-          `O valor corrigido excede o saldo devido do atendimento ($${(devido - recebidoSemEsteLancamento).toFixed(2)} disponível).`,
-        );
-      }
-    }
-
-    // O estorno mantém a data do próprio lançamento sendo corrigido (não a data do atendimento
-    // nem "hoje") — é o lançamento específico que está sendo revertido, e ele pode ter sido
-    // registrado bem depois do atendimento (ver registrarPagamentoAdicionalAction).
-    const dataCorrecao = dadosCorretos.dataPagamento ? mmddyyyyToISO(dadosCorretos.dataPagamento) : original.dataPagamento;
-
-    const ids = await proximosPagamentoIds(tx, 2);
-    const lancamentos = [
-      {
-        id: ids[0].id,
-        numeroSequencial: ids[0].numeroSequencial,
-        atendimentoId: original.atendimentoId,
-        natureza: original.natureza,
-        tipo: "estorno" as const,
-        dataPagamento: original.dataPagamento,
-        valor: restante,
-        formaPagamento: original.formaPagamento,
-        observacoesPt: "",
-        observacoesEn: "",
-        estornaPagamentoId: original.id,
-      },
-      {
-        id: ids[1].id,
-        numeroSequencial: ids[1].numeroSequencial,
-        atendimentoId: original.atendimentoId,
-        natureza: original.natureza,
-        tipo: "entrada" as const,
-        dataPagamento: dataCorrecao,
-        valor: dadosCorretos.valor,
-        formaPagamento: dadosCorretos.formaPagamento,
-        observacoesPt: dadosCorretos.observacoesPt?.trim() ?? "",
-        observacoesEn: dadosCorretos.observacoesEn?.trim() ?? "",
-        estornaPagamentoId: original.id,
-      },
-    ];
-    await tx.pagamento.createMany({ data: lancamentos });
-
-    const status: AtendimentoStatus =
-      original.natureza === "servico"
-        ? calcularStatusAposRecebimento(
-            devido,
-            calcularValorRecebidoServico(existente.pagamentos) - restante + dadosCorretos.valor,
-          )
-        : (existente.status as AtendimentoStatus);
-
-    const row = await tx.atendimento.update({
-      where: { id: original.atendimentoId },
-      data: { status },
-      include: { servicos: true, pagamentos: true },
-    });
-
-    const novosLancamentos: NovoLancamentoCaixa[] = lancamentos.map((l) => ({
-      id: l.id,
-      atendimentoId: l.atendimentoId,
-      natureza: l.natureza as "servico" | "gorjeta",
-      tipo: l.tipo,
-      dataPagamento: l.dataPagamento,
-      valor: l.valor,
-      formaPagamento: l.formaPagamento as FormaPagamento | null,
-      observacoesPt: l.observacoesPt,
-      observacoesEn: l.observacoesEn,
-    }));
-
-    return { atendimento: mapAtendimentoRow(row), novosLancamentos };
-  });
+  const resultado = await prisma.$transaction((tx) => executarCorrecaoLancamento(tx, pagamentoId, dadosCorretos));
 
   revalidatePath("/", "layout");
   return resultado;
+}
+
+/**
+ * Aplica uma ou mais correções de lançamento (ex.: serviço e gorjeta do mesmo atendimento,
+ * corrigidos juntos pela tela do Financeiro) dentro de uma única transação SQLite — evita que uma
+ * correção grave com sucesso e a outra falhe, deixando o atendimento parcialmente corrigido.
+ */
+export async function corrigirLancamentosAction(
+  correcoes: { pagamentoId: string; dados: CorrigirLancamentoDados }[],
+): Promise<CorrigirLancamentoResultado[]> {
+  const resultados = await prisma.$transaction(async (tx) => {
+    const acumulado: CorrigirLancamentoResultado[] = [];
+    for (const { pagamentoId, dados } of correcoes) {
+      acumulado.push(await executarCorrecaoLancamento(tx, pagamentoId, dados));
+    }
+    return acumulado;
+  });
+
+  revalidatePath("/", "layout");
+  return resultados;
 }

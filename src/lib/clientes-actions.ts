@@ -16,10 +16,19 @@ async function nextContatoId(tx: Tx): Promise<{ id: string; numeroSequencial: nu
   return { id: `CTT-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
+/** Mesma regra usada em `ClienteFormModal.tsx` (`telefoneValido`): aceita qualquer formatação
+ * (parênteses, espaços, traços, "+"), desde que reste ao menos 7 dígitos. */
+function telefoneValido(telefone: string) {
+  return telefone.replace(/\D/g, "").length >= 7;
+}
+
 function validarContato(contato: Contato | null) {
   if (!contato) return;
   if (contato.telefone.trim() === "") {
     throw new Error("Telefone do contato é obrigatório.");
+  }
+  if (!telefoneValido(contato.telefone)) {
+    throw new Error("Telefone do contato é inválido.");
   }
 }
 

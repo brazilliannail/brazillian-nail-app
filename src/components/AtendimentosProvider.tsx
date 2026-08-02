@@ -13,6 +13,7 @@ import {
   iniciarAtendimentoDoAgendamentoAction,
   registrarPagamentoAdicionalAction,
   corrigirLancamentoAction,
+  corrigirLancamentosAction,
   type RegistrarPagamentoAdicionalDados,
   type CorrigirLancamentoDados,
   type CorrigirLancamentoResultado,
@@ -40,6 +41,11 @@ type AtendimentosContextValue = {
    * recém-criados (estorno do original + entrada corrigida) para quem chamou poder atualizar o
    * cache local do Dashboard Financeiro (`FinanceiroProvider`) sem recarregar a página. */
   corrigirLancamento: (pagamentoId: string, dados: CorrigirLancamentoDados) => Promise<CorrigirLancamentoResultado>;
+  /** Mesma correção acima, mas para 2+ lançamentos do mesmo atendimento (ex.: serviço + gorjeta)
+   * aplicados atomicamente em uma única transação — evita corrigir só um dos dois se o outro falhar. */
+  corrigirLancamentos: (
+    correcoes: { pagamentoId: string; dados: CorrigirLancamentoDados }[],
+  ) => Promise<CorrigirLancamentoResultado[]>;
   /** Abre o atendimento de um agendamento da Agenda. `criado: false` = já existia um atendimento
    * ativo para aquele agendamento e ele foi apenas devolvido (proteção contra duplicidade). */
   iniciarAtendimentoDoAgendamento: (agendamentoId: string) => Promise<{ id: string; criado: boolean }>;
@@ -138,6 +144,15 @@ export function AtendimentosProvider({
     return resultado;
   }
 
+  async function corrigirLancamentos(correcoes: { pagamentoId: string; dados: CorrigirLancamentoDados }[]) {
+    const resultados = await corrigirLancamentosAction(correcoes);
+    setAtendimentos((prev) =>
+      prev.map((item) => resultados.find((r) => r.atendimento.id === item.id)?.atendimento ?? item),
+    );
+    router.refresh();
+    return resultados;
+  }
+
   return (
     <AtendimentosContext.Provider
       value={{
@@ -150,6 +165,7 @@ export function AtendimentosProvider({
         estornarAtendimento,
         registrarPagamentoAdicional,
         corrigirLancamento,
+        corrigirLancamentos,
         iniciarAtendimentoDoAgendamento,
       }}
     >

@@ -52,7 +52,7 @@ export default function FinanceiroPage() {
   const { t } = useLanguage();
   const f = t.financeiro;
   const router = useRouter();
-  const { atendimentos, estornarAtendimento, registrarPagamentoAdicional, corrigirLancamento } = useAtendimentos();
+  const { atendimentos, estornarAtendimento, registrarPagamentoAdicional, corrigirLancamentos } = useAtendimentos();
   const { clientes } = useClientes();
   const lancamentosCaixa = useLancamentosCaixa();
   const adicionarLancamentosCaixa = useAdicionarLancamentosCaixa();
@@ -196,15 +196,15 @@ export default function FinanceiroPage() {
   async function handleConfirmarCorrecao(correcoes: CorrecoesPagamento) {
     try {
       setErroCorrigirPagamento(null);
-      if (correcoes.servico) {
-        const { pagamentoId, ...dados } = correcoes.servico;
-        const resultado = await corrigirLancamento(pagamentoId, dados);
-        adicionarLancamentosCaixa(resultado.novosLancamentos.map(converterNovoLancamento));
-      }
-      if (correcoes.gorjeta) {
-        const { pagamentoId, ...dados } = correcoes.gorjeta;
-        const resultado = await corrigirLancamento(pagamentoId, dados);
-        adicionarLancamentosCaixa(resultado.novosLancamentos.map(converterNovoLancamento));
+      // Serviço e gorjeta são corrigidos numa única transação (corrigirLancamentosAction) para
+      // não deixar o atendimento parcialmente corrigido caso um dos dois falhe (ex.: valor de
+      // serviço corrigido excede o saldo devido) depois do outro já ter sido gravado.
+      const pedidos = [correcoes.servico, correcoes.gorjeta]
+        .filter((c): c is NonNullable<typeof c> => c != null)
+        .map(({ pagamentoId, ...dados }) => ({ pagamentoId, dados }));
+      if (pedidos.length > 0) {
+        const resultados = await corrigirLancamentos(pedidos);
+        adicionarLancamentosCaixa(resultados.flatMap((r) => r.novosLancamentos.map(converterNovoLancamento)));
       }
       setCorrigindoPagamentoId(null);
     } catch (error) {

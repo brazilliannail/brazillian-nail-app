@@ -109,6 +109,59 @@ describe("clientes (clientes-actions + clientes-repo)", () => {
     ).rejects.toThrow("Telefone do contato é obrigatório.");
   });
 
+  it("rejeita contato com telefone com menos de 7 dígitos (mesma regra de ClienteFormModal)", async () => {
+    await expect(
+      createClienteAction({
+        nome: `Cliente Teste ${proximoSufixo()}`,
+        nomePreferencia: null,
+        contatoPrincipal: {
+          nomeContato: "Contato com telefone curto",
+          telefone: "(555) 12",
+          relacao: "propria",
+          idioma: "pt",
+          canalPreferido: "whatsapp",
+          receberLembretes: true,
+        },
+        contatoSecundario: null,
+        status: "ativa",
+        ultimoAtendimento: "",
+        proximoAgendamento: null,
+        observacoesPt: "",
+        observacoesEn: "",
+        avisosImportantesPt: [],
+        avisosImportantesEn: [],
+        valorPendente: 0,
+        historico: [],
+      }),
+    ).rejects.toThrow("Telefone do contato é inválido.");
+  });
+
+  it("aceita telefone com 7+ dígitos mesmo com formatação (parênteses, espaços, traço, +)", async () => {
+    const criada = await createClienteAction({
+      nome: `Cliente Teste ${proximoSufixo()}`,
+      nomePreferencia: null,
+      contatoPrincipal: {
+        nomeContato: "Contato formatado",
+        telefone: "+1 (508) 555-0100",
+        relacao: "propria",
+        idioma: "pt",
+        canalPreferido: "whatsapp",
+        receberLembretes: true,
+      },
+      contatoSecundario: null,
+      status: "ativa",
+      ultimoAtendimento: "",
+      proximoAgendamento: null,
+      observacoesPt: "",
+      observacoesEn: "",
+      avisosImportantesPt: [],
+      avisosImportantesEn: [],
+      valorPendente: 0,
+      historico: [],
+    });
+    expect(criada.contatoPrincipal?.telefone).toBe("+1 (508) 555-0100");
+  });
+
   it("atualiza dados e sincroniza contatos: remover contato secundário de fato o apaga", async () => {
     const sufixo = proximoSufixo();
     const criada = await createClienteAction({

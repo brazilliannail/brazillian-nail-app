@@ -167,7 +167,7 @@ export default function ClientesPage() {
               cliente={clienteSelecionada}
               onClose={() => setSelectedId(null)}
               onEdit={() => setFormState({ modo: "editar", cliente: clienteSelecionada })}
-              onToggleStatus={() => toggleStatus(clienteSelecionada.id)}
+              onToggleStatus={() => handleToggleStatus(clienteSelecionada.id)}
             />
           </div>
         </div>
