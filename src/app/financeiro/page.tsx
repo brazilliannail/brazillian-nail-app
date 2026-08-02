@@ -16,7 +16,7 @@ import { CorrigirPagamentoModal, type CorrecoesPagamento } from "@/components/Co
 import { RelatorioAtendimentos } from "@/components/RelatorioAtendimentos";
 import type { RegistrarPagamentoAdicionalDados, NovoLancamentoCaixa } from "@/lib/atendimentos-actions";
 import type { LancamentoCaixa } from "@/lib/financeiro-repo";
-import { CashIcon, ScissorsIcon, WalletIcon, TagIcon, ClockIcon, CalendarIcon } from "@/components/icons";
+import { CashIcon, ScissorsIcon, WalletIcon, TagIcon, ClockIcon, CalendarIcon, AlertIcon } from "@/components/icons";
 import { formatDateMMDDYYYY, isSameDay, parseDateISO } from "@/lib/date";
 import {
   calcularAgregadoFinanceiro,
@@ -46,6 +46,10 @@ function formatCurrency(value: number) {
 
 function formatCount(value: number) {
   return String(value);
+}
+
+function formatEstornos(quantidade: number, valor: number) {
+  return `${quantidade} · ${formatCurrency(valor)}`;
 }
 
 export default function FinanceiroPage() {
@@ -378,6 +382,13 @@ export default function FinanceiroPage() {
             value={formatCurrency(mainAgg.ticketMedio)}
             tone="brand"
             comparacao={buildComparacao(mainAgg.ticketMedio, compareAgg?.ticketMedio, formatCurrency)}
+          />
+          <StatCard
+            icon={AlertIcon}
+            label={f.cartoes.estornosPeriodo}
+            value={formatEstornos(mainAgg.estornosQuantidade, mainAgg.estornosValor)}
+            tone="warning"
+            comparacao={buildComparacao(mainAgg.estornosValor, compareAgg?.estornosValor, formatCurrency)}
           />
         </div>
 

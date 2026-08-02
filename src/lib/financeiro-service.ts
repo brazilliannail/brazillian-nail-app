@@ -1,5 +1,11 @@
 import type { Atendimento, FormaPagamento } from "@/lib/atendimentos-mock";
-import { STATUS_ATENDIMENTO_REALIZADO, saldoPendente, somaServicos, valorTotalDevido } from "@/lib/atendimentos-mock";
+import {
+  STATUS_ATENDIMENTO_REALIZADO,
+  STATUS_ATENDIMENTO_FATURAMENTO,
+  saldoPendente,
+  somaServicos,
+  valorTotalDevido,
+} from "@/lib/atendimentos-mock";
 import type { AgendaAppointment } from "@/lib/agenda-mock";
 import type { Cliente } from "@/lib/clientes-mock";
 import {
@@ -48,11 +54,27 @@ export function statusPagamentoDeAtendimento(status: Atendimento["status"]): Sta
 }
 
 /** Atendimentos "realizados" (ver STATUS_ATENDIMENTO_REALIZADO) cuja `data` cai dentro do range,
- * já convertida de MM/DD/YYYY para Date. Base de todo indicador por competência. */
+ * já convertida de MM/DD/YYYY para Date. Base dos indicadores operacionais/produção (inclui
+ * `estornado` — o atendimento aconteceu, mesmo que o dinheiro tenha sido devolvido depois). */
 function atendimentosRealizadosNoPeriodo(atendimentos: Atendimento[], range: DateRange): Atendimento[] {
   return atendimentos.filter(
     (a) => STATUS_ATENDIMENTO_REALIZADO.has(a.status) && dentroDoIntervalo(parseDateMMDDYYYY(a.data), range),
   );
+}
+
+/** Atendimentos que compõem faturamento de competência (ver STATUS_ATENDIMENTO_FATURAMENTO)
+ * cuja `data` cai dentro do range — base de Valor de Serviços, Descontos, Quantidade de
+ * Atendimentos, Ticket Médio e dos detalhamentos por cliente/serviço. Exclui `estornado`. */
+function atendimentosFaturamentoNoPeriodo(atendimentos: Atendimento[], range: DateRange): Atendimento[] {
+  return atendimentos.filter(
+    (a) => STATUS_ATENDIMENTO_FATURAMENTO.has(a.status) && dentroDoIntervalo(parseDateMMDDYYYY(a.data), range),
+  );
+}
+
+/** Atendimentos `estornado` cuja `data` cai dentro do range — base do indicador "Estornos do
+ * período" (quantidade + valor bruto revertido). */
+function atendimentosEstornadosNoPeriodo(atendimentos: Atendimento[], range: DateRange): Atendimento[] {
+  return atendimentos.filter((a) => a.status === "estornado" && dentroDoIntervalo(parseDateMMDDYYYY(a.data), range));
 }
 
 /** Lançamentos de caixa (`pagamentos`) cuja `dataPagamento` cai dentro do range — base dos
@@ -69,27 +91,34 @@ export type AgregadoFinanceiro = {
   totalPendente: number;
   quantidadeAtendimentos: number;
   ticketMedio: number;
+  estornosQuantidade: number;
+  estornosValor: number;
 };
 
 /**
  * Agregado financeiro de um período — fonte única para os StatCards de topo e para os campos
  * equivalentes do relatório de atendimentos (nunca recalculado duas vezes com bases diferentes).
+ * Valor de Serviços/Descontos/Quantidade de Atendimentos/Ticket Médio usam a base de faturamento
+ * (exclui `estornado`, ver STATUS_ATENDIMENTO_FATURAMENTO); `totalPendente` já excluía `estornado`
+ * por outro caminho (STATUS_ATENDIMENTO_COM_SALDO_ABERTO); `totalRecebido`/`gorjetas` (caixa) já
+ * são líquidos de estorno via o próprio livro-razão, sem mudança aqui.
  */
 export function calcularAgregadoFinanceiro(
   atendimentos: Atendimento[],
   lancamentosCaixa: LancamentoCaixa[],
   range: DateRange,
 ): AgregadoFinanceiro {
-  const atendimentosPeriodo = atendimentosRealizadosNoPeriodo(atendimentos, range);
+  const atendimentosFaturamento = atendimentosFaturamentoNoPeriodo(atendimentos, range);
+  const atendimentosEstornados = atendimentosEstornadosNoPeriodo(atendimentos, range);
   const caixaPeriodo = lancamentosCaixaNoPeriodo(lancamentosCaixa, range);
 
-  const valorServicos = round2(atendimentosPeriodo.reduce((total, a) => total + somaServicos(a.servicos), 0));
-  const descontos = round2(atendimentosPeriodo.reduce((total, a) => total + a.desconto, 0));
-  const quantidadeAtendimentos = atendimentosPeriodo.length;
+  const valorServicos = round2(atendimentosFaturamento.reduce((total, a) => total + somaServicos(a.servicos), 0));
+  const descontos = round2(atendimentosFaturamento.reduce((total, a) => total + a.desconto, 0));
+  const quantidadeAtendimentos = atendimentosFaturamento.length;
   const ticketMedio = quantidadeAtendimentos > 0 ? round2(valorServicos / quantidadeAtendimentos) : 0;
 
   const totalPendente = round2(
-    atendimentosPeriodo
+    atendimentosFaturamento
       .filter((a) => STATUS_ATENDIMENTO_COM_SALDO_ABERTO.has(a.status))
       .reduce((total, a) => total + saldoPendente(a), 0),
   );
@@ -97,7 +126,20 @@ export function calcularAgregadoFinanceiro(
   const totalRecebido = round2(calcularValorRecebidoServico(caixaPeriodo));
   const gorjetas = round2(calcularValorRecebidoGorjeta(caixaPeriodo));
 
-  return { totalRecebido, valorServicos, gorjetas, descontos, totalPendente, quantidadeAtendimentos, ticketMedio };
+  const estornosQuantidade = atendimentosEstornados.length;
+  const estornosValor = round2(atendimentosEstornados.reduce((total, a) => total + somaServicos(a.servicos), 0));
+
+  return {
+    totalRecebido,
+    valorServicos,
+    gorjetas,
+    descontos,
+    totalPendente,
+    quantidadeAtendimentos,
+    ticketMedio,
+    estornosQuantidade,
+    estornosValor,
+  };
 }
 
 export type RelatorioAtendimentosData = AgregadoFinanceiro & {
@@ -166,20 +208,22 @@ export type PorServicoItem = { nomePt: string; nomeEn: string; valor: number };
 export type PorFormaPagamentoItem = { forma: FormaPagamento | null; valor: number };
 export type PorStatusPagamentoItem = { status: StatusPagamento; valor: number };
 
-/** Detalhamento por cliente: valor de serviços (competência) gerado no período, por clienteId. */
+/** Detalhamento por cliente: valor de serviços (competência) gerado no período, por clienteId —
+ * mesma base de faturamento de `calcularAgregadoFinanceiro` (exclui `estornado`), para a soma
+ * do detalhamento sempre bater com o StatCard "Valor de Serviços". */
 export function detalharPorCliente(atendimentos: Atendimento[], range: DateRange): PorClienteItem[] {
   const totais = new Map<string, number>();
-  for (const a of atendimentosRealizadosNoPeriodo(atendimentos, range)) {
+  for (const a of atendimentosFaturamentoNoPeriodo(atendimentos, range)) {
     totais.set(a.clienteId, (totais.get(a.clienteId) ?? 0) + somaServicos(a.servicos));
   }
   return Array.from(totais, ([clienteId, valor]) => ({ clienteId, valor: round2(valor) }));
 }
 
-/** Detalhamento por serviço: um atendimento com vários serviços contribui uma vez para cada item
- * (mesma unidade de "produção" usada em `servicosRealizados`, ver D4). */
+/** Detalhamento por serviço (competência, mesma base de faturamento de `detalharPorCliente`):
+ * um atendimento com vários serviços contribui uma vez para cada item. */
 export function detalharPorServico(atendimentos: Atendimento[], range: DateRange): PorServicoItem[] {
   const totais = new Map<string, { nomePt: string; nomeEn: string; valor: number }>();
-  for (const a of atendimentosRealizadosNoPeriodo(atendimentos, range)) {
+  for (const a of atendimentosFaturamentoNoPeriodo(atendimentos, range)) {
     for (const servico of a.servicos) {
       const chave = servico.servicoId ?? `${servico.nomePt}|${servico.nomeEn}`;
       const atual = totais.get(chave);

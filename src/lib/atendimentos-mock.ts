@@ -62,6 +62,20 @@ export const STATUS_ATENDIMENTO_REALIZADO = new Set<string>([
   "estornado",
 ]);
 
+/** Subconjunto de STATUS_ATENDIMENTO_REALIZADO usado pelos indicadores financeiros de
+ * competência (Valor de Serviços, Descontos, Quantidade de Atendimentos, Ticket Médio e os
+ * detalhamentos por cliente/serviço, em financeiro-service.ts) — exclui "estornado": o
+ * atendimento continua no histórico operacional (STATUS_ATENDIMENTO_REALIZADO), mas seu valor
+ * não deve compor faturamento nem ticket médio líquido (regra aprovada, PROJECT_STATUS.md §13
+ * item 2). Indicadores de produção/operacionais (servicosRealizados, clientesNovas, etc.)
+ * continuam usando STATUS_ATENDIMENTO_REALIZADO, não este conjunto. */
+export const STATUS_ATENDIMENTO_FATURAMENTO = new Set<string>([
+  "finalizadoPago",
+  "finalizadoPendente",
+  "finalizadoParcial",
+  "finalizadoCortesia",
+]);
+
 export function somaServicos(servicos: ServicoRealizado[]) {
   return servicos.reduce((total, item) => total + item.valor, 0);
 }

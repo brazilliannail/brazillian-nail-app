@@ -581,6 +581,7 @@ export const dictionary = {
         totalPendente: "Total pendente",
         quantidadeAtendimentos: "Quantidade de atendimentos",
         ticketMedio: "Ticket médio dos serviços",
+        estornosPeriodo: "Estornos do período",
       },
       formasPagamento: {
         titulo: "Formas de pagamento",
@@ -1510,6 +1511,7 @@ export const dictionary = {
         totalPendente: "Total pending",
         quantidadeAtendimentos: "Number of appointments",
         ticketMedio: "Average service ticket",
+        estornosPeriodo: "Refunds this period",
       },
       formasPagamento: {
         titulo: "Payment methods",
