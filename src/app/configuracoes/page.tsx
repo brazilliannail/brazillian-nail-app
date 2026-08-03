@@ -403,12 +403,6 @@ export default function ConfiguracoesPage() {
           label={c.agenda.bloqueioConflito}
           description={c.agenda.bloqueioConflitoDescricao}
         />
-        <Toggle
-          checked={state.agenda.permitirEncaixeComConfirmacao}
-          onChange={(value) => updateSection("agenda", { permitirEncaixeComConfirmacao: value })}
-          label={c.agenda.permitirEncaixe}
-          description={c.agenda.permitirEncaixeDescricao}
-        />
       </SettingsCard>
 
       <SettingsCard icon={BellIcon} title={c.lembretes.titulo} description={c.lembretes.descricao}>

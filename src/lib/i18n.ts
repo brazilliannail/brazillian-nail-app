@@ -870,8 +870,6 @@ export const dictionary = {
         diasSemanaLabel: { dom: "Dom", seg: "Seg", ter: "Ter", qua: "Qua", qui: "Qui", sex: "Sex", sab: "Sáb" },
         bloqueioConflito: "Bloqueio de conflito de horário",
         bloqueioConflitoDescricao: "Impede marcar dois agendamentos no mesmo horário.",
-        permitirEncaixe: "Permitir encaixe com sobreposição mediante confirmação",
-        permitirEncaixeDescricao: "Sobreposições exigirão confirmação manual antes de salvar.",
       },
       lembretes: {
         titulo: "Lembretes",
@@ -1801,8 +1799,6 @@ export const dictionary = {
         diasSemanaLabel: { dom: "Sun", seg: "Mon", ter: "Tue", qua: "Wed", qui: "Thu", sex: "Fri", sab: "Sat" },
         bloqueioConflito: "Block scheduling conflicts",
         bloqueioConflitoDescricao: "Prevents booking two appointments at the same time.",
-        permitirEncaixe: "Allow overlapping walk-ins with confirmation",
-        permitirEncaixeDescricao: "Overlaps will require manual confirmation before saving.",
       },
       lembretes: {
         titulo: "Reminders",
