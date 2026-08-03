@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import { CashIcon, CalendarIcon, UsersIcon, ChatIcon } from "@/components/icons";
 import type { PendenciaFinanceira } from "@/lib/financeiro-service";
 
@@ -16,8 +17,10 @@ type ValorPendenteCardProps = {
 
 export function ValorPendenteCard({ pendente, selected, onSelect }: ValorPendenteCardProps) {
   const { t } = useLanguage();
+  const { visible } = useFinancialVisibility();
   const v = t.financeiro.valoresPendentes;
   const dias = pendente.diasEmAberto === 1 ? v.dia : v.dias;
+  const valor = (n: number) => (visible ? formatCurrency(n) : VALOR_OCULTO);
 
   return (
     <div
@@ -39,15 +42,15 @@ export function ValorPendenteCard({ pendente, selected, onSelect }: ValorPendent
           </div>
           <div className="flex items-center justify-between gap-2">
             <dt className="text-foreground/50">{t.financeiro.detalhes.valorServicos}</dt>
-            <dd className="font-medium text-foreground">{formatCurrency(pendente.valorDevido)}</dd>
+            <dd className="font-medium text-foreground">{valor(pendente.valorDevido)}</dd>
           </div>
           <div className="flex items-center justify-between gap-2">
             <dt className="text-foreground/50">{t.financeiro.campos.valorRecebido}</dt>
-            <dd className="font-medium text-foreground">{formatCurrency(pendente.valorRecebido)}</dd>
+            <dd className="font-medium text-foreground">{valor(pendente.valorRecebido)}</dd>
           </div>
           <div className="flex items-center justify-between gap-2">
             <dt className="font-medium text-status-aguardando">{t.financeiro.campos.saldoPendente}</dt>
-            <dd className="text-base font-semibold text-status-aguardando">{formatCurrency(pendente.saldoPendente)}</dd>
+            <dd className="text-base font-semibold text-status-aguardando">{valor(pendente.saldoPendente)}</dd>
           </div>
         </dl>
       </button>

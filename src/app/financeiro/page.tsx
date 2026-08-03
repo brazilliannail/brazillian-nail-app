@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import { useAtendimentos } from "@/components/AtendimentosProvider";
 import { useClientes } from "@/components/ClientesProvider";
 import { useLancamentosCaixa, useAdicionarLancamentosCaixa } from "@/components/FinanceiroProvider";
@@ -56,6 +57,7 @@ export default function FinanceiroPage() {
   const { t } = useLanguage();
   const f = t.financeiro;
   const router = useRouter();
+  const { visible } = useFinancialVisibility();
   const { atendimentos, estornarAtendimento, registrarPagamentoAdicional, corrigirLancamentos } = useAtendimentos();
   const { clientes } = useClientes();
   const lancamentosCaixa = useLancamentosCaixa();
@@ -122,6 +124,16 @@ export default function FinanceiroPage() {
   );
 
   const pendencias = useMemo(() => listarPendencias(atendimentos, clientesPorId, today), [atendimentos, clientesPorId, today]);
+
+  // "Ocultar valores" (Header) — quando ativo, todo valor monetário do Dashboard Financeiro fica
+  // mascarado (StatCards, comparação de período, forma de pagamento, listas, painel de detalhes).
+  // Quantidades (ex.: Quantidade de Atendimentos) não são valor financeiro e continuam visíveis.
+  function formatCurrencyVisivel(value: number) {
+    return visible ? formatCurrency(value) : VALOR_OCULTO;
+  }
+  function formatEstornosVisivel(quantidade: number, valor: number) {
+    return visible ? formatEstornos(quantidade, valor) : `${quantidade} · ${VALOR_OCULTO}`;
+  }
 
   function buildComparacao(atual: number, anterior: number | undefined, formatar: (value: number) => string) {
     if (!compareAgg || anterior === undefined || !compareRange) return undefined;
@@ -341,34 +353,34 @@ export default function FinanceiroPage() {
           <StatCard
             icon={CashIcon}
             label={f.cartoes.totalRecebido}
-            value={formatCurrency(mainAgg.totalRecebido)}
+            value={formatCurrencyVisivel(mainAgg.totalRecebido)}
             tone="brand"
-            comparacao={buildComparacao(mainAgg.totalRecebido, compareAgg?.totalRecebido, formatCurrency)}
+            comparacao={buildComparacao(mainAgg.totalRecebido, compareAgg?.totalRecebido, formatCurrencyVisivel)}
           />
           <StatCard
             icon={ScissorsIcon}
             label={f.cartoes.valorServicos}
-            value={formatCurrency(mainAgg.valorServicos)}
-            comparacao={buildComparacao(mainAgg.valorServicos, compareAgg?.valorServicos, formatCurrency)}
+            value={formatCurrencyVisivel(mainAgg.valorServicos)}
+            comparacao={buildComparacao(mainAgg.valorServicos, compareAgg?.valorServicos, formatCurrencyVisivel)}
           />
           <StatCard
             icon={WalletIcon}
             label={f.cartoes.gorjetas}
-            value={formatCurrency(mainAgg.gorjetas)}
-            comparacao={buildComparacao(mainAgg.gorjetas, compareAgg?.gorjetas, formatCurrency)}
+            value={formatCurrencyVisivel(mainAgg.gorjetas)}
+            comparacao={buildComparacao(mainAgg.gorjetas, compareAgg?.gorjetas, formatCurrencyVisivel)}
           />
           <StatCard
             icon={TagIcon}
             label={f.cartoes.descontos}
-            value={formatCurrency(mainAgg.descontos)}
-            comparacao={buildComparacao(mainAgg.descontos, compareAgg?.descontos, formatCurrency)}
+            value={formatCurrencyVisivel(mainAgg.descontos)}
+            comparacao={buildComparacao(mainAgg.descontos, compareAgg?.descontos, formatCurrencyVisivel)}
           />
           <StatCard
             icon={ClockIcon}
             label={f.cartoes.totalPendente}
-            value={formatCurrency(mainAgg.totalPendente)}
+            value={formatCurrencyVisivel(mainAgg.totalPendente)}
             tone="warning"
-            comparacao={buildComparacao(mainAgg.totalPendente, compareAgg?.totalPendente, formatCurrency)}
+            comparacao={buildComparacao(mainAgg.totalPendente, compareAgg?.totalPendente, formatCurrencyVisivel)}
           />
           <StatCard
             icon={CalendarIcon}
@@ -379,16 +391,16 @@ export default function FinanceiroPage() {
           <StatCard
             icon={CashIcon}
             label={f.cartoes.ticketMedio}
-            value={formatCurrency(mainAgg.ticketMedio)}
+            value={formatCurrencyVisivel(mainAgg.ticketMedio)}
             tone="brand"
-            comparacao={buildComparacao(mainAgg.ticketMedio, compareAgg?.ticketMedio, formatCurrency)}
+            comparacao={buildComparacao(mainAgg.ticketMedio, compareAgg?.ticketMedio, formatCurrencyVisivel)}
           />
           <StatCard
             icon={AlertIcon}
             label={f.cartoes.estornosPeriodo}
-            value={formatEstornos(mainAgg.estornosQuantidade, mainAgg.estornosValor)}
+            value={formatEstornosVisivel(mainAgg.estornosQuantidade, mainAgg.estornosValor)}
             tone="warning"
-            comparacao={buildComparacao(mainAgg.estornosValor, compareAgg?.estornosValor, formatCurrency)}
+            comparacao={buildComparacao(mainAgg.estornosValor, compareAgg?.estornosValor, formatCurrencyVisivel)}
           />
         </div>
 

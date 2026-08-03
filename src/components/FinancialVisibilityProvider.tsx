@@ -2,6 +2,11 @@
 
 import { createContext, useContext, useMemo, useState } from "react";
 
+/** Texto usado no lugar de qualquer valor financeiro quando `visible === false` — fonte única,
+ * reaproveitada por toda tela que consome `useFinancialVisibility()` (Home e Dashboard
+ * Financeiro), para nunca haver dois placeholders divergentes. */
+export const VALOR_OCULTO = "••••••";
+
 type FinancialVisibilityContextValue = {
   visible: boolean;
   toggleVisible: () => void;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import type { FormaPagamento } from "@/lib/atendimentos-mock";
 
 function formatCurrency(value: number) {
@@ -13,6 +14,7 @@ type FormaPagamentoBarsProps = {
 
 export function FormaPagamentoBars({ dados }: FormaPagamentoBarsProps) {
   const { t } = useLanguage();
+  const { visible } = useFinancialVisibility();
   const f = t.financeiro;
   const maximo = Math.max(...dados.map((item) => item.valor), 1);
 
@@ -29,12 +31,12 @@ export function FormaPagamentoBars({ dados }: FormaPagamentoBarsProps) {
               <span className="text-foreground/70">
                 {item.forma ? f.formaPagamentoLabel[item.forma] : f.detalhes.formaPagamentoNaoDefinida}
               </span>
-              <span className="font-medium text-foreground">{formatCurrency(item.valor)}</span>
+              <span className="font-medium text-foreground">{visible ? formatCurrency(item.valor) : VALOR_OCULTO}</span>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-brand"
-                style={{ width: `${Math.max((item.valor / maximo) * 100, 4)}%` }}
+                style={{ width: visible ? `${Math.max((item.valor / maximo) * 100, 4)}%` : "4%" }}
               />
             </div>
           </div>

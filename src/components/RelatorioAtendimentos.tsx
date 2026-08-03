@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import { useAtendimentos } from "@/components/AtendimentosProvider";
 import { useAgenda } from "@/components/AgendaProvider";
 import { useClientes } from "@/components/ClientesProvider";
@@ -51,6 +52,7 @@ type RelatorioAtendimentosProps = {
 export function RelatorioAtendimentos({ range }: RelatorioAtendimentosProps) {
   const { locale, t } = useLanguage();
   const r = t.financeiro.relatorio;
+  const { visible } = useFinancialVisibility();
   const { atendimentos } = useAtendimentos();
   const { agendamentos } = useAgenda();
   const { clientes } = useClientes();
@@ -100,12 +102,27 @@ export function RelatorioAtendimentos({ range }: RelatorioAtendimentosProps) {
         <StatCard icon={UserPlusIcon} label={r.campos.clientesNovas} value={dados.clientesNovas} />
         <StatCard icon={HistoryIcon} label={r.campos.clientesRecorrentes} value={dados.clientesRecorrentes} />
         <StatCard icon={ScissorsIcon} label={r.campos.servicosRealizados} value={dados.servicosRealizados} />
-        <StatCard icon={CashIcon} label={r.campos.valorServicos} value={formatCurrency(dados.valorServicos)} />
-        <StatCard icon={CashIcon} label={r.campos.totalRecebido} value={formatCurrency(dados.totalRecebido)} tone="brand" />
-        <StatCard icon={ClockIcon} label={r.campos.totalPendente} value={formatCurrency(dados.totalPendente)} tone="warning" />
-        <StatCard icon={WalletIcon} label={r.campos.gorjetas} value={formatCurrency(dados.gorjetas)} />
-        <StatCard icon={TagIcon} label={r.campos.descontos} value={formatCurrency(dados.descontos)} />
-        <StatCard icon={CashIcon} label={r.campos.ticketMedio} value={formatCurrency(dados.ticketMedio)} tone="brand" />
+        <StatCard icon={CashIcon} label={r.campos.valorServicos} value={visible ? formatCurrency(dados.valorServicos) : VALOR_OCULTO} />
+        <StatCard
+          icon={CashIcon}
+          label={r.campos.totalRecebido}
+          value={visible ? formatCurrency(dados.totalRecebido) : VALOR_OCULTO}
+          tone="brand"
+        />
+        <StatCard
+          icon={ClockIcon}
+          label={r.campos.totalPendente}
+          value={visible ? formatCurrency(dados.totalPendente) : VALOR_OCULTO}
+          tone="warning"
+        />
+        <StatCard icon={WalletIcon} label={r.campos.gorjetas} value={visible ? formatCurrency(dados.gorjetas) : VALOR_OCULTO} />
+        <StatCard icon={TagIcon} label={r.campos.descontos} value={visible ? formatCurrency(dados.descontos) : VALOR_OCULTO} />
+        <StatCard
+          icon={CashIcon}
+          label={r.campos.ticketMedio}
+          value={visible ? formatCurrency(dados.ticketMedio) : VALOR_OCULTO}
+          tone="brand"
+        />
         <StatCard icon={CloseIcon} label={r.campos.cancelamentos} value={dados.cancelamentos} />
         <StatCard icon={UserXIcon} label={r.campos.ausencias} value={dados.ausencias} />
       </div>
@@ -132,7 +149,7 @@ export function RelatorioAtendimentos({ range }: RelatorioAtendimentosProps) {
             {r.detalharPor.profissionalIndisponivel}
           </p>
         ) : (
-          <DetalhamentoBars dados={itensDetalhamento} />
+          <DetalhamentoBars dados={itensDetalhamento} visible={visible} />
         )}
       </div>
     </div>

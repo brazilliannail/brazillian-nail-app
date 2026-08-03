@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import { FinanceiroStatusBadge } from "@/components/FinanceiroStatusBadge";
 import { CalendarIcon } from "@/components/icons";
 import type { AtendimentoFinanceiro } from "@/lib/financeiro-service";
@@ -17,8 +18,10 @@ type PagamentoCardProps = {
 
 export function PagamentoCard({ pagamento, selected, onSelect }: PagamentoCardProps) {
   const { locale, t } = useLanguage();
+  const { visible } = useFinancialVisibility();
   const f = t.financeiro;
   const servico = locale === "pt" ? pagamento.servicoPt : pagamento.servicoEn;
+  const valor = (v: number) => (visible ? formatCurrency(v) : VALOR_OCULTO);
 
   return (
     <button
@@ -44,22 +47,22 @@ export function PagamentoCard({ pagamento, selected, onSelect }: PagamentoCardPr
       <dl className="flex flex-col gap-1.5 text-sm">
         <div className="flex items-center justify-between gap-2">
           <dt className="text-foreground/50">{f.campos.valorServicos}</dt>
-          <dd className="font-medium text-foreground">{formatCurrency(pagamento.valorServicos)}</dd>
+          <dd className="font-medium text-foreground">{valor(pagamento.valorServicos)}</dd>
         </div>
         <div className="flex items-center justify-between gap-2">
           <dt className="text-foreground/50">{f.campos.valorRecebido}</dt>
-          <dd className="font-medium text-foreground">{formatCurrency(pagamento.valorRecebido)}</dd>
+          <dd className="font-medium text-foreground">{valor(pagamento.valorRecebido)}</dd>
         </div>
         {pagamento.gorjeta > 0 && (
           <div className="flex items-center justify-between gap-2">
             <dt className="text-foreground/50">{f.campos.gorjeta}</dt>
-            <dd className="font-medium text-foreground">{formatCurrency(pagamento.gorjeta)}</dd>
+            <dd className="font-medium text-foreground">{valor(pagamento.gorjeta)}</dd>
           </div>
         )}
         {pagamento.saldoPendente > 0 && (
           <div className="flex items-center justify-between gap-2">
             <dt className="text-foreground/50">{f.campos.saldoPendente}</dt>
-            <dd className="font-semibold text-status-aguardando">{formatCurrency(pagamento.saldoPendente)}</dd>
+            <dd className="font-semibold text-status-aguardando">{valor(pagamento.saldoPendente)}</dd>
           </div>
         )}
         <div className="flex items-center justify-between gap-2">

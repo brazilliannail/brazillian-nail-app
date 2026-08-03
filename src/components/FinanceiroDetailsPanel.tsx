@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import { FinanceiroStatusBadge } from "@/components/FinanceiroStatusBadge";
 import { CloseIcon, PlusIcon, EditIcon, CalendarIcon, UsersIcon, HistoryIcon } from "@/components/icons";
 import type { AtendimentoFinanceiro } from "@/lib/financeiro-service";
@@ -31,6 +32,7 @@ export function FinanceiroDetailsPanel({
   onAbrirCliente,
 }: FinanceiroDetailsPanelProps) {
   const { locale, t } = useLanguage();
+  const { visible } = useFinancialVisibility();
   const f = t.financeiro;
   const d = f.detalhes;
 
@@ -41,6 +43,7 @@ export function FinanceiroDetailsPanel({
   const observacoes = locale === "pt" ? pagamento.observacoesPt : pagamento.observacoesEn;
   const totalDevido = pagamento.valorServicos - pagamento.desconto;
   const atendimentoRelacionado = `${servico} · ${pagamento.dataAtendimento}`;
+  const valor = (v: number) => (visible ? formatCurrency(v) : VALOR_OCULTO);
 
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-sm">
@@ -84,23 +87,23 @@ export function FinanceiroDetailsPanel({
         <dl className="flex flex-col gap-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{d.valorServicos}</dt>
-            <dd className="font-medium text-foreground">{formatCurrency(pagamento.valorServicos)}</dd>
+            <dd className="font-medium text-foreground">{valor(pagamento.valorServicos)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{d.desconto}</dt>
-            <dd className="font-medium text-foreground">{formatCurrency(pagamento.desconto)}</dd>
+            <dd className="font-medium text-foreground">{valor(pagamento.desconto)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-foreground/50">{d.gorjeta}</dt>
-            <dd className="font-medium text-foreground">{formatCurrency(pagamento.gorjeta)}</dd>
+            <dd className="font-medium text-foreground">{valor(pagamento.gorjeta)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
             <dt className="font-medium text-foreground/70">{d.totalDevido}</dt>
-            <dd className="font-semibold text-foreground">{formatCurrency(totalDevido)}</dd>
+            <dd className="font-semibold text-foreground">{valor(totalDevido)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="font-medium text-foreground/70">{d.valorRecebido}</dt>
-            <dd className="font-semibold text-foreground">{formatCurrency(pagamento.valorRecebido)}</dd>
+            <dd className="font-semibold text-foreground">{valor(pagamento.valorRecebido)}</dd>
           </div>
         </dl>
 
@@ -108,13 +111,13 @@ export function FinanceiroDetailsPanel({
           <div className="flex items-center justify-between rounded-xl border border-status-aguardando/30 bg-status-aguardando/10 px-3 py-2">
             <span className="text-sm font-medium text-status-aguardando">{d.saldoPendente}</span>
             <span className="text-base font-semibold text-status-aguardando">
-              {formatCurrency(pagamento.saldoPendente)}
+              {valor(pagamento.saldoPendente)}
             </span>
           </div>
         ) : (
           <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2">
             <span className="text-sm text-foreground/60">{d.saldoPendente}</span>
-            <span className="text-sm font-medium text-foreground">{formatCurrency(0)}</span>
+            <span className="text-sm font-medium text-foreground">{valor(0)}</span>
           </div>
         )}
 

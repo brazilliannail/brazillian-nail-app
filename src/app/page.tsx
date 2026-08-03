@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
-import { useFinancialVisibility } from "@/components/FinancialVisibilityProvider";
+import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisibilityProvider";
 import { useAgenda } from "@/components/AgendaProvider";
 import { useAtendimentos } from "@/components/AtendimentosProvider";
 import { useClientes } from "@/components/ClientesProvider";
@@ -24,8 +24,6 @@ import type { Cliente } from "@/lib/clientes-mock";
 import type { Atendimento } from "@/lib/atendimentos-mock";
 import { calcularAgregadoFinanceiro, calcularSaldoAbertoGlobal } from "@/lib/financeiro-service";
 import { getMainRange } from "@/lib/financeiro-comparacao";
-
-const VALOR_OCULTO = "••••••";
 
 function formatCurrency(value: number) {
   return `$${value.toFixed(2)}`;
