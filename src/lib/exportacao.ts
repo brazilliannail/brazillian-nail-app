@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
+import { centavosParaDolares } from "@/lib/despesas-mock";
 
-export const EXPORT_DATASETS = ["clientes", "servicos", "agenda", "atendimentos", "financeiro"] as const;
+export const EXPORT_DATASETS = ["clientes", "servicos", "agenda", "atendimentos", "financeiro", "despesas"] as const;
 export type ExportDataset = (typeof EXPORT_DATASETS)[number];
 
 export function isExportDataset(valor: string | null): valor is ExportDataset {
@@ -22,26 +23,55 @@ export function montarCsv(colunas: string[], linhas: Record<string, unknown>[]) 
 }
 
 export async function obterBackupCompleto() {
-  const [clientes, contatos, servicos, agendamentos, atendimentos, atendimentoServicos, pagamentos, lembretes, mensagensLog, configuracoes] =
-    await prisma.$transaction([
-      prisma.cliente.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.contato.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.servico.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.agendamento.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.atendimento.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.atendimentoServico.findMany({ orderBy: { id: "asc" } }),
-      prisma.pagamento.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.lembrete.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.mensagemLog.findMany({ orderBy: { numeroSequencial: "asc" } }),
-      prisma.configuracao.findMany({ orderBy: { id: "asc" } }),
-    ]);
+  const [
+    clientes,
+    contatos,
+    servicos,
+    agendamentos,
+    atendimentos,
+    atendimentoServicos,
+    pagamentos,
+    lembretes,
+    mensagensLog,
+    configuracoes,
+    despesas,
+    lancamentosDespesa,
+  ] = await prisma.$transaction([
+    prisma.cliente.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.contato.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.servico.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.agendamento.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.atendimento.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.atendimentoServico.findMany({ orderBy: { id: "asc" } }),
+    prisma.pagamento.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.lembrete.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.mensagemLog.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.configuracao.findMany({ orderBy: { id: "asc" } }),
+    prisma.despesa.findMany({ orderBy: { numeroSequencial: "asc" } }),
+    prisma.lancamentoDespesa.findMany({ orderBy: { numeroSequencial: "asc" } }),
+  ]);
 
   return {
     formato: "brazillian-nail-backup",
-    versao: 1,
+    // versao 2: adiciona despesas/lancamentosDespesa (módulo Despesas). Backups versao 1
+    // continuam válidos para leitura/validação — ver backup-validation.ts.
+    versao: 2,
     exportadoEm: new Date().toISOString(),
     aviso: "Este arquivo contém dados pessoais. Guarde-o em local privado.",
-    dados: { clientes, contatos, servicos, agendamentos, atendimentos, atendimentoServicos, pagamentos, lembretes, mensagensLog, configuracoes },
+    dados: {
+      clientes,
+      contatos,
+      servicos,
+      agendamentos,
+      atendimentos,
+      atendimentoServicos,
+      pagamentos,
+      lembretes,
+      mensagensLog,
+      configuracoes,
+      despesas,
+      lancamentosDespesa,
+    },
   };
 }
 
@@ -67,7 +97,39 @@ export async function obterCsv(dataset: ExportDataset) {
     return montarCsv(colunas, linhas.map(({ cliente, servicos, ...item }) => ({ ...item, cliente: cliente.nome, servicos: servicos.map((s) => s.nomePt).join(" | "), valorServicos: servicos.reduce((total, s) => total + s.valor, 0) })));
   }
 
-  const linhas = await prisma.pagamento.findMany({ include: { atendimento: { include: { cliente: true } } }, orderBy: [{ dataPagamento: "asc" }, { numeroSequencial: "asc" }] });
-  const colunas = ["id", "dataPagamento", "cliente", "atendimentoId", "natureza", "tipo", "valor", "formaPagamento", "estornaPagamentoId", "observacoesPt", "observacoesEn"];
-  return montarCsv(colunas, linhas.map(({ atendimento, ...item }) => ({ ...item, cliente: atendimento.cliente.nome })));
+  if (dataset === "financeiro") {
+    const linhas = await prisma.pagamento.findMany({ include: { atendimento: { include: { cliente: true } } }, orderBy: [{ dataPagamento: "asc" }, { numeroSequencial: "asc" }] });
+    const colunas = ["id", "dataPagamento", "cliente", "atendimentoId", "natureza", "tipo", "valor", "formaPagamento", "estornaPagamentoId", "observacoesPt", "observacoesEn"];
+    return montarCsv(colunas, linhas.map(({ atendimento, ...item }) => ({ ...item, cliente: atendimento.cliente.nome })));
+  }
+
+  const linhas = await prisma.lancamentoDespesa.findMany({ include: { despesa: true }, orderBy: [{ vencimento: "asc" }, { numeroSequencial: "asc" }] });
+  const colunas = [
+    "id",
+    "despesaId",
+    "descricao",
+    "categoria",
+    "tipo",
+    "competencia",
+    "vencimento",
+    "numeroParcela",
+    "totalParcelas",
+    "valor",
+    "status",
+    "dataPagamento",
+    "formaPagamento",
+    "ajustaLancamentoId",
+    "observacoesPt",
+    "observacoesEn",
+  ];
+  return montarCsv(
+    colunas,
+    linhas.map(({ despesa, valorCentavos, ...item }) => ({
+      ...item,
+      descricao: despesa.descricao,
+      categoria: despesa.categoria,
+      tipo: despesa.tipo,
+      valor: centavosParaDolares(valorCentavos),
+    })),
+  );
 }

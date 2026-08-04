@@ -1,6 +1,6 @@
-# Projeto técnico — Despesas (não implementado)
+# Projeto técnico — Despesas (implementado)
 
-Este documento prepara uma futura área de despesas sem alterar o aplicativo, o banco ou as regras financeiras atuais. A implementação só deve começar depois da confirmação das decisões de negócio abaixo.
+**Implementado em 2026-08-04**, após confirmação de todas as decisões de negócio abaixo. Ver `CERTIFICATION.md` para o resumo do que foi entregue e `PROJECT_STATUS.md` §16 para o detalhamento técnico. Este documento é mantido como registro do desenho original e das decisões aprovadas.
 
 ## Objetivo
 

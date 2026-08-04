@@ -7,6 +7,7 @@ import { useFinancialVisibility, VALOR_OCULTO } from "@/components/FinancialVisi
 import { useAtendimentos } from "@/components/AtendimentosProvider";
 import { useClientes } from "@/components/ClientesProvider";
 import { useLancamentosCaixa, useAdicionarLancamentosCaixa } from "@/components/FinanceiroProvider";
+import { useLancamentosDespesa } from "@/components/DespesasProvider";
 import { StatCard } from "@/components/StatCard";
 import { FormaPagamentoBars } from "@/components/FormaPagamentoBars";
 import { PagamentoCard } from "@/components/PagamentoCard";
@@ -21,6 +22,8 @@ import { CashIcon, ScissorsIcon, WalletIcon, TagIcon, ClockIcon, CalendarIcon, A
 import { formatDateMMDDYYYY, isSameDay, parseDateISO } from "@/lib/date";
 import {
   calcularAgregadoFinanceiro,
+  calcularAgregadoDespesas,
+  calcularSaldoOperacional,
   detalharPorFormaPagamento,
   listarAtendimentosFinanceiros,
   listarPendencias,
@@ -61,6 +64,7 @@ export default function FinanceiroPage() {
   const { atendimentos, estornarAtendimento, registrarPagamentoAdicional, corrigirLancamentos } = useAtendimentos();
   const { clientes } = useClientes();
   const lancamentosCaixa = useLancamentosCaixa();
+  const lancamentosDespesa = useLancamentosDespesa();
   const adicionarLancamentosCaixa = useAdicionarLancamentosCaixa();
   const [periodo, setPeriodo] = useState<Periodo>("hoje");
   const [comparacao, setComparacao] = useState<ComparacaoOpcao>(COMPARACAO_PADRAO_POR_PERIODO.hoje);
@@ -111,6 +115,16 @@ export default function FinanceiroPage() {
   const compareAgg = useMemo(
     () => (compareRange ? calcularAgregadoFinanceiro(atendimentos, lancamentosCaixa, compareRange) : null),
     [atendimentos, lancamentosCaixa, compareRange],
+  );
+
+  const despesasAgg = useMemo(
+    () => calcularAgregadoDespesas(lancamentosDespesa, mainRange),
+    [lancamentosDespesa, mainRange],
+  );
+
+  const saldoOperacional = useMemo(
+    () => calcularSaldoOperacional(mainAgg.totalRecebido, despesasAgg.totalPago),
+    [mainAgg.totalRecebido, despesasAgg.totalPago],
   );
 
   const formasPagamento = useMemo(
@@ -402,6 +416,38 @@ export default function FinanceiroPage() {
             tone="warning"
             comparacao={buildComparacao(mainAgg.estornosValor, compareAgg?.estornosValor, formatCurrencyVisivel)}
           />
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">{f.saldoOperacional.titulo}</p>
+            <p className="text-xs text-foreground/60">{f.saldoOperacional.explicacao}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard
+              icon={CashIcon}
+              label={f.saldoOperacional.receitasRecebidas}
+              value={formatCurrencyVisivel(saldoOperacional.receitasRecebidas)}
+              tone="brand"
+            />
+            <StatCard
+              icon={WalletIcon}
+              label={f.saldoOperacional.despesasPagas}
+              value={formatCurrencyVisivel(saldoOperacional.despesasPagas)}
+            />
+            <StatCard
+              icon={CalendarIcon}
+              label={f.saldoOperacional.saldo}
+              value={formatCurrencyVisivel(saldoOperacional.saldo)}
+              tone={saldoOperacional.saldo >= 0 ? "brand" : "warning"}
+            />
+            <StatCard
+              icon={ClockIcon}
+              label={f.saldoOperacional.despesasPrevistas}
+              value={formatCurrencyVisivel(despesasAgg.totalPrevisto)}
+              tone="warning"
+            />
+          </div>
         </div>
 
         <FormaPagamentoBars dados={formasPagamento} />

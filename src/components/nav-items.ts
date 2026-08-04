@@ -1,4 +1,4 @@
-import { HomeIcon, CalendarIcon, UsersIcon, TagIcon, ScissorsIcon, WalletIcon, BellIcon, GearIcon } from "@/components/icons";
+import { HomeIcon, CalendarIcon, UsersIcon, TagIcon, ScissorsIcon, WalletIcon, BuildingIcon, BellIcon, GearIcon } from "@/components/icons";
 import type { Dictionary } from "@/lib/i18n";
 
 export type NavKey = keyof Dictionary["nav"];
@@ -13,6 +13,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "servicos", href: "/servicos", icon: TagIcon },
   { key: "atendimentos", href: "/atendimentos", icon: ScissorsIcon },
   { key: "financeiro", href: "/financeiro", icon: WalletIcon },
+  { key: "despesas", href: "/despesas", icon: BuildingIcon },
   { key: "lembretes", href: "/lembretes", icon: BellIcon },
   { key: "configuracoes", href: "/configuracoes", icon: GearIcon },
 ];
@@ -21,4 +22,4 @@ export const NAV_ITEMS: NavItem[] = [
 export const BOTTOM_NAV_PRIMARY_KEYS: NavKey[] = ["inicio", "agenda", "clientes", "financeiro"];
 
 /** Itens agrupados dentro de "Mais" na barra inferior. */
-export const BOTTOM_NAV_MORE_KEYS: NavKey[] = ["servicos", "atendimentos", "lembretes", "configuracoes"];
+export const BOTTOM_NAV_MORE_KEYS: NavKey[] = ["servicos", "atendimentos", "despesas", "lembretes", "configuracoes"];

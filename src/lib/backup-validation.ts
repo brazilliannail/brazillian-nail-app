@@ -1,4 +1,4 @@
-export const BACKUP_COLLECTIONS = [
+export const BACKUP_COLLECTIONS_V1 = [
   "clientes",
   "contatos",
   "servicos",
@@ -11,10 +11,15 @@ export const BACKUP_COLLECTIONS = [
   "configuracoes",
 ] as const;
 
+/** Coleções novas do módulo Despesas (EXPENSES_DESIGN.md) — só exigidas em backups `versao: 2`. */
+export const BACKUP_COLLECTIONS_DESPESAS = ["despesas", "lancamentosDespesa"] as const;
+
+export const BACKUP_COLLECTIONS = [...BACKUP_COLLECTIONS_V1, ...BACKUP_COLLECTIONS_DESPESAS] as const;
+
 export type BackupCollection = (typeof BACKUP_COLLECTIONS)[number];
 
 export type ResultadoValidacaoBackup =
-  | { valido: true; totais: Record<BackupCollection, number> }
+  | { valido: true; totais: Partial<Record<BackupCollection, number>> }
   | { valido: false; erros: string[] };
 
 function objeto(valor: unknown): valor is Record<string, unknown> {
@@ -24,13 +29,18 @@ function objeto(valor: unknown): valor is Record<string, unknown> {
 /**
  * Faz uma inspeção segura antes de qualquer tentativa de restauração. Esta função não grava,
  * altera nem exclui dados; ela apenas confirma o formato e as relações essenciais do arquivo.
+ *
+ * Aceita duas versões: `versao: 1` (backups anteriores ao módulo Despesas, 10 coleções) e
+ * `versao: 2` (a partir de `despesas`/`lancamentosDespesa` — ver `obterBackupCompleto`). Backups
+ * antigos continuam válidos sem precisar conter as coleções novas — tratamento explícito da
+ * versão anterior, não uma quebra de compatibilidade.
  */
 export function validarBackupCompleto(valor: unknown): ResultadoValidacaoBackup {
   const erros: string[] = [];
 
   if (!objeto(valor)) return { valido: false, erros: ["O arquivo não contém um objeto JSON válido."] };
   if (valor.formato !== "brazillian-nail-backup") erros.push("Formato de backup não reconhecido.");
-  if (valor.versao !== 1) erros.push("Versão de backup incompatível.");
+  if (valor.versao !== 1 && valor.versao !== 2) erros.push("Versão de backup incompatível.");
   if (typeof valor.exportadoEm !== "string" || Number.isNaN(Date.parse(valor.exportadoEm))) {
     erros.push("Data de exportação ausente ou inválida.");
   }
@@ -40,8 +50,10 @@ export function validarBackupCompleto(valor: unknown): ResultadoValidacaoBackup 
     return { valido: false, erros };
   }
 
-  const totais = {} as Record<BackupCollection, number>;
-  for (const colecao of BACKUP_COLLECTIONS) {
+  const colecoesExigidas: readonly BackupCollection[] = valor.versao === 2 ? BACKUP_COLLECTIONS : BACKUP_COLLECTIONS_V1;
+
+  const totais: Partial<Record<BackupCollection, number>> = {};
+  for (const colecao of colecoesExigidas) {
     const itens = valor.dados[colecao];
     if (!Array.isArray(itens)) erros.push(`A coleção ${colecao} está ausente ou inválida.`);
     else totais[colecao] = itens.length;
@@ -50,7 +62,7 @@ export function validarBackupCompleto(valor: unknown): ResultadoValidacaoBackup 
   if (erros.length > 0) return { valido: false, erros };
 
   const idsPorColecao = new Map<BackupCollection, Set<unknown>>();
-  for (const colecao of BACKUP_COLLECTIONS) {
+  for (const colecao of colecoesExigidas) {
     const itens = valor.dados[colecao] as unknown[];
     const ids = new Set<unknown>();
     for (const item of itens) {
@@ -64,7 +76,7 @@ export function validarBackupCompleto(valor: unknown): ResultadoValidacaoBackup 
     idsPorColecao.set(colecao, ids);
   }
 
-  const relacoes: Array<[BackupCollection, string, BackupCollection]> = [
+  const relacoesV1: Array<[BackupCollection, string, BackupCollection]> = [
     ["contatos", "clienteId", "clientes"],
     ["agendamentos", "clienteId", "clientes"],
     ["agendamentos", "servicoId", "servicos"],
@@ -80,6 +92,11 @@ export function validarBackupCompleto(valor: unknown): ResultadoValidacaoBackup 
     ["mensagensLog", "contatoId", "contatos"],
     ["mensagensLog", "lembreteId", "lembretes"],
   ];
+  const relacoesDespesas: Array<[BackupCollection, string, BackupCollection]> = [
+    ["lancamentosDespesa", "despesaId", "despesas"],
+    ["lancamentosDespesa", "ajustaLancamentoId", "lancamentosDespesa"],
+  ];
+  const relacoes = valor.versao === 2 ? [...relacoesV1, ...relacoesDespesas] : relacoesV1;
 
   for (const [origem, campo, destino] of relacoes) {
     for (const item of valor.dados[origem] as Record<string, unknown>[]) {

@@ -8,9 +8,11 @@ describe("exportação de dados", () => {
     const chaves = Object.keys(backup.dados);
 
     expect(backup.formato).toBe("brazillian-nail-backup");
-    expect(backup.versao).toBe(1);
+    expect(backup.versao).toBe(2);
     expect(chaves).toContain("configuracoes");
     expect(chaves).toContain("clientes");
+    expect(chaves).toContain("despesas");
+    expect(chaves).toContain("lancamentosDespesa");
     expect(chaves.some((chave) => /auth|senha|secret|token/i.test(chave))).toBe(false);
   });
 
@@ -21,7 +23,7 @@ describe("exportação de dados", () => {
   });
 
   it("gera todos os CSVs com cabeçalho mesmo quando não há dados operacionais", async () => {
-    for (const dataset of ["clientes", "servicos", "agenda", "atendimentos", "financeiro"] as const) {
+    for (const dataset of ["clientes", "servicos", "agenda", "atendimentos", "financeiro", "despesas"] as const) {
       const csv = await obterCsv(dataset);
       expect(csv.split("\r\n")[0].length).toBeGreaterThan(10);
       expect(csv).not.toMatch(/password|secret|token/i);

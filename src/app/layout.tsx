@@ -8,6 +8,7 @@ import { ServicosProvider } from "@/components/ServicosProvider";
 import { AgendaProvider } from "@/components/AgendaProvider";
 import { AtendimentosProvider } from "@/components/AtendimentosProvider";
 import { FinanceiroProvider } from "@/components/FinanceiroProvider";
+import { DespesasProvider } from "@/components/DespesasProvider";
 import { ConfiguracoesProvider } from "@/components/ConfiguracoesProvider";
 import { LembretesProvider } from "@/components/LembretesProvider";
 import { AppShell } from "@/components/AppShell";
@@ -16,6 +17,7 @@ import { getServicos } from "@/lib/servicos-repo";
 import { getAgendamentos } from "@/lib/agenda-repo";
 import { getAtendimentos } from "@/lib/atendimentos-repo";
 import { getLancamentosCaixa } from "@/lib/financeiro-repo";
+import { getDespesas, getLancamentosDespesa } from "@/lib/despesas-repo";
 import { getConfiguracoes } from "@/lib/configuracoes-repo";
 import { getLembretesAmanha } from "@/lib/lembretes-repo";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -84,6 +86,8 @@ export default async function RootLayout({
     agendamentosIniciais,
     atendimentosIniciais,
     lancamentosCaixaIniciais,
+    despesasIniciais,
+    lancamentosDespesaIniciais,
     lembretesIniciais,
   ] = await Promise.all([
     getClientes(),
@@ -91,6 +95,8 @@ export default async function RootLayout({
     getAgendamentos(),
     getAtendimentos(),
     getLancamentosCaixa(),
+    getDespesas(),
+    getLancamentosDespesa(),
     getLembretesAmanha(configuracoesIniciais.lembretes.ativarLembretesDiaAnterior),
   ]);
 
@@ -107,13 +113,15 @@ export default async function RootLayout({
               <AgendaProvider agendamentosIniciais={agendamentosIniciais}>
                 <AtendimentosProvider atendimentosIniciais={atendimentosIniciais}>
                   <FinanceiroProvider lancamentosCaixaIniciais={lancamentosCaixaIniciais}>
-                    <ConfiguracoesProvider configuracoesIniciais={configuracoesIniciais}>
-                      <LembretesProvider lembretesIniciais={lembretesIniciais}>
-                        <FinancialVisibilityProvider>
-                          <AppShell>{children}</AppShell>
-                        </FinancialVisibilityProvider>
-                      </LembretesProvider>
-                    </ConfiguracoesProvider>
+                    <DespesasProvider despesasIniciais={despesasIniciais} lancamentosDespesaIniciais={lancamentosDespesaIniciais}>
+                      <ConfiguracoesProvider configuracoesIniciais={configuracoesIniciais}>
+                        <LembretesProvider lembretesIniciais={lembretesIniciais}>
+                          <FinancialVisibilityProvider>
+                            <AppShell>{children}</AppShell>
+                          </FinancialVisibilityProvider>
+                        </LembretesProvider>
+                      </ConfiguracoesProvider>
+                    </DespesasProvider>
                   </FinanceiroProvider>
                 </AtendimentosProvider>
               </AgendaProvider>

@@ -246,6 +246,70 @@ model Configuracao {
   @@map("configuracoes")
 }
 
+// Despesas do salão (EXPENSES_DESIGN.md) — sem estoque/produtos. Valores em centavos inteiros
+// (não `Float`) para a soma de parcelas nunca sofrer erro de arredondamento de ponto flutuante
+// (ex.: US$1200 em 10x precisa somar exatamente 120000 centavos, não 119999.9999...). Uma
+// `Despesa` é o cadastro (avulsa/recorrente/parcelada); cada `LancamentoDespesa` é uma ocorrência
+// mensal/semanal dela. Nenhuma linha paga é editada ou apagada — correções são um novo
+// `LancamentoDespesa` referenciando o original via `ajustaLancamentoId` (mesmo padrão de
+// `Pagamento.estornaPagamentoId`).
+model Despesa {
+  id                 String    @id
+  numeroSequencial   Int       @unique @map("numero_sequencial")
+  descricao          String
+  categoria          String
+  tipo               String
+  valorTotalCentavos Int       @map("valor_total_centavos")
+  data               String
+  parcelas           Int?
+  diaSemana          Int?      @map("dia_semana")
+  dataEncerramento   String?   @map("data_encerramento")
+  observacoesPt      String    @default("") @map("observacoes_pt")
+  observacoesEn      String    @default("") @map("observacoes_en")
+  status             String    @default("ativa")
+  criadoEm           DateTime  @default(now()) @map("criado_em")
+  atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
+
+  lancamentos LancamentoDespesa[]
+
+  @@index([status])
+  @@index([categoria])
+  @@index([tipo])
+  @@map("despesas")
+}
+
+model LancamentoDespesa {
+  id                 String    @id
+  numeroSequencial   Int       @unique @map("numero_sequencial")
+  despesaId          String    @map("despesa_id")
+  competencia        String
+  vencimento         String
+  numeroParcela      Int?      @map("numero_parcela")
+  totalParcelas      Int?      @map("total_parcelas")
+  valorCentavos      Int       @map("valor_centavos")
+  status             String    @default("pendente")
+  dataPagamento      String?   @map("data_pagamento")
+  formaPagamento     String?   @map("forma_pagamento")
+  observacoesPt      String    @default("") @map("observacoes_pt")
+  observacoesEn      String    @default("") @map("observacoes_en")
+  ajustaLancamentoId String?   @map("ajusta_lancamento_id")
+  criadoEm           DateTime  @default(now()) @map("criado_em")
+  atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
+
+  // RESTRICT (não Cascade/SetNull) nas duas relações: uma despesa nunca pode apagar seus
+  // lançamentos ao ser removida, e o vínculo de auditoria de um ajuste nunca pode "desaparecer"
+  // silenciosamente — a aplicação nunca deleta despesas nem lançamentos (só marca `cancelado`),
+  // então RESTRICT é uma segunda camada de proteção, não uma restrição operacional.
+  despesa          Despesa             @relation(fields: [despesaId], references: [id], onDelete: Restrict)
+  ajustaLancamento LancamentoDespesa?  @relation("AjusteDespesa", fields: [ajustaLancamentoId], references: [id], onDelete: Restrict)
+  ajustes          LancamentoDespesa[] @relation("AjusteDespesa")
+
+  @@index([despesaId])
+  @@index([vencimento])
+  @@index([status])
+  @@map("lancamentos_despesa")
+}
+
 model MensagemLog {
   id             String    @id
   numeroSequencial Int     @unique @map("numero_sequencial")

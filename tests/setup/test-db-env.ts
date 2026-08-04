@@ -8,15 +8,19 @@ import { PrismaPGlite } from "pglite-prisma-adapter";
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/brazillian_nail_test";
 
 const memoryDb = new PGlite();
-const migrationPath = path.resolve(
-  process.cwd(),
-  "prisma/migrations/20260804012000_postgresql_baseline/migration.sql",
-);
-const migrationSql = fs
-  .readFileSync(migrationPath, "utf8")
-  .replace('CREATE SCHEMA IF NOT EXISTS "public";', "");
+const migrationsDir = path.resolve(process.cwd(), "prisma/migrations");
+const migrationFolders = fs
+  .readdirSync(migrationsDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
 
-await memoryDb.exec(migrationSql);
+for (const folder of migrationFolders) {
+  const migrationSql = fs
+    .readFileSync(path.join(migrationsDir, folder, "migration.sql"), "utf8")
+    .replace('CREATE SCHEMA IF NOT EXISTS "public";', "");
+  await memoryDb.exec(migrationSql);
+}
 
 const testGlobal = globalThis as unknown as { brazillianNailTestAdapter?: unknown };
 testGlobal.brazillianNailTestAdapter = new PrismaPGlite(memoryDb);

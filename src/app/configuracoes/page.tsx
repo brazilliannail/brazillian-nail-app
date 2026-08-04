@@ -551,7 +551,7 @@ export default function ConfiguracoesPage() {
             <a href="/api/exportacao?formato=json" download className={buttonSecondaryClass}>
               {c.backup.backupCompleto}
             </a>
-            {(["clientes", "servicos", "agenda", "atendimentos", "financeiro"] as const).map((dados) => (
+            {(["clientes", "servicos", "agenda", "atendimentos", "financeiro", "despesas"] as const).map((dados) => (
               <a
                 key={dados}
                 href={`/api/exportacao?formato=csv&dados=${dados}`}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BACKUP_COLLECTIONS, validarBackupCompleto } from "@/lib/backup-validation";
+import { BACKUP_COLLECTIONS, BACKUP_COLLECTIONS_V1, validarBackupCompleto } from "@/lib/backup-validation";
 
-function backupValido() {
+function backupV1Valido() {
   return {
     formato: "brazillian-nail-backup",
     versao: 1,
@@ -17,6 +17,18 @@ function backupValido() {
       lembretes: [{ id: "lem-1", agendamentoId: "age-1" }],
       mensagensLog: [{ id: "msg-1", clienteId: "cli-1" }],
       configuracoes: [{ id: 1 }],
+    },
+  };
+}
+
+function backupValido() {
+  return {
+    ...backupV1Valido(),
+    versao: 2,
+    dados: {
+      ...backupV1Valido().dados,
+      despesas: [{ id: "desp-1" }],
+      lancamentosDespesa: [{ id: "ldesp-1", despesaId: "desp-1", ajustaLancamentoId: null }],
     },
   };
 }
@@ -37,10 +49,32 @@ describe("validação preventiva de backup", () => {
   it("recusa formato e versão incompatíveis", () => {
     const backup = backupValido();
     backup.formato = "outro-formato";
-    backup.versao = 2;
+    backup.versao = 3;
     const resultado = validarBackupCompleto(backup);
     expect(resultado).toMatchObject({ valido: false });
     if (!resultado.valido) expect(resultado.erros).toHaveLength(2);
+  });
+
+  it("aceita um backup versao 1 (anterior ao módulo Despesas), sem exigir despesas/lancamentosDespesa", () => {
+    const resultado = validarBackupCompleto(backupV1Valido());
+    expect(resultado).toEqual({
+      valido: true,
+      totais: Object.fromEntries(BACKUP_COLLECTIONS_V1.map((nome) => [nome, 1])),
+    });
+  });
+
+  it("recusa um backup versao 2 sem as coleções de despesas", () => {
+    const backup = backupValido();
+    Reflect.deleteProperty(backup.dados, "despesas");
+    expect(validarBackupCompleto(backup)).toMatchObject({ valido: false });
+  });
+
+  it("recusa lançamento de despesa ligado a uma despesa inexistente", () => {
+    const backup = backupValido();
+    backup.dados.lancamentosDespesa[0].despesaId = "desp-inexistente";
+    const resultado = validarBackupCompleto(backup);
+    expect(resultado).toMatchObject({ valido: false });
+    if (!resultado.valido) expect(resultado.erros.join(" ")).toContain("lancamentosDespesa.despesaId");
   });
 
   it("recusa uma data de exportação inválida", () => {

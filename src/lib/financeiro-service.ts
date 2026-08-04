@@ -15,7 +15,8 @@ import {
 } from "@/lib/pagamentos-repo";
 import type { LancamentoCaixa } from "@/lib/financeiro-repo";
 import type { DateRange } from "@/lib/financeiro-comparacao";
-import { formatDateMMDDYYYY, parseDateMMDDYYYY } from "@/lib/date";
+import { formatDateMMDDYYYY, parseDateISO, parseDateMMDDYYYY } from "@/lib/date";
+import { centavosParaDolares, type LancamentoDespesa } from "@/lib/despesas-mock";
 
 /**
  * Camada de composição de indicadores do Dashboard Financeiro — funções puras (sem I/O), único
@@ -461,5 +462,55 @@ export function buscarLancamentosCorrigiveis(atendimentoId: string, lancamentosC
   return {
     servico: entradaMaisRecente(atendimentoId, lancamentosCaixa, "servico"),
     gorjeta: entradaMaisRecente(atendimentoId, lancamentosCaixa, "gorjeta"),
+  };
+}
+
+export type AgregadoDespesas = {
+  /** Soma dos lançamentos `pago` cuja `dataPagamento` cai no período — inclui ajustes (ver
+   * `corrigirLancamentoDespesaAction`), que também nascem `pago`. */
+  totalPago: number;
+  /** Soma dos lançamentos `pendente` cujo `vencimento` cai no período — valor previsto, nunca
+   * misturado com o pago (EXPENSES_DESIGN.md: "o resumo explica visualmente cada componente"). */
+  totalPrevisto: number;
+  quantidadePaga: number;
+  quantidadePrevista: number;
+};
+
+/**
+ * Agregado de despesas de um período — mesma base (`LancamentoDespesa`) usada pela tela de
+ * Despesas e pelo saldo operacional do Financeiro. `totalPago` nunca é chamado de "custo" nem
+ * confundido com apuração contábil; é só a soma do que já saiu do caixa.
+ */
+export function calcularAgregadoDespesas(lancamentosDespesa: LancamentoDespesa[], range: DateRange): AgregadoDespesas {
+  const pagos = lancamentosDespesa.filter(
+    (l) => l.status === "pago" && l.dataPagamento !== null && dentroDoIntervalo(parseDateISO(l.dataPagamento), range),
+  );
+  const previstos = lancamentosDespesa.filter(
+    (l) => l.status === "pendente" && dentroDoIntervalo(parseDateISO(l.vencimento), range),
+  );
+
+  return {
+    totalPago: round2(centavosParaDolares(pagos.reduce((total, l) => total + l.valorCentavos, 0))),
+    totalPrevisto: round2(centavosParaDolares(previstos.reduce((total, l) => total + l.valorCentavos, 0))),
+    quantidadePaga: pagos.length,
+    quantidadePrevista: previstos.length,
+  };
+}
+
+export type SaldoOperacional = {
+  receitasRecebidas: number;
+  despesasPagas: number;
+  /** receitasRecebidas − despesasPagas. Resultado operacional simples de caixa — não é lucro
+   * contábil/fiscal (não considera impostos, depreciação, competência, etc. — EXPENSES_DESIGN.md). */
+  saldo: number;
+};
+
+/** Gorjetas ficam fora deliberadamente — não entram em `receitasRecebidas` (que já é só
+ * `totalRecebido`, natureza `servico`, ver `calcularAgregadoFinanceiro`) nem em despesas. */
+export function calcularSaldoOperacional(receitasRecebidas: number, despesasPagas: number): SaldoOperacional {
+  return {
+    receitasRecebidas: round2(receitasRecebidas),
+    despesasPagas: round2(despesasPagas),
+    saldo: round2(receitasRecebidas - despesasPagas),
   };
 }
