@@ -1,5 +1,15 @@
 # PROJECT_STATUS.md — Brazillian Nail
 
+## Atualização de segurança e manutenção — 2026-08-04
+
+- Produção ativa na Vercel com PostgreSQL Neon; referências antigas a SQLite/Supabase abaixo são históricas e não descrevem a infraestrutura atual.
+- Login exclusivo da Rosangela por código de e-mail, sem cadastro público e com autorização repetida nas operações do servidor.
+- Login traduzido para português.
+- Exportação autenticada implementada em **Configurações → Backup e dados**: backup completo JSON e CSVs de clientes, serviços, agenda, atendimentos e financeiro. Credenciais e tabelas de autenticação não entram nos arquivos.
+- Recuperação gratuita em duas camadas: histórico/snapshot nativo do Neon e cópia manual privada. Backups não são publicados como artifacts no repositório público.
+- CI do GitHub configurada para executar typecheck, lint e testes em cada push/pull request de `main`, sem conectar ao banco de produção.
+- Documentação principal atualizada em `README.md`, `SETUP.md` e `BACKUP_RESTORE.md`.
+
 > Retrato do estado real do projeto em 2026-07-29, produzido por revisão de código (não por relato de memória). Serve como roadmap oficial das próximas etapas. Nenhum código foi alterado para produzir este documento. Substitui a versão anterior deste arquivo (de 2026-07-14), que descrevia a fase de protótipo 100% mock — o projeto já avançou para persistência real em SQLite desde então.
 
 > **Atualização de infraestrutura — 2026-08-03:** a persistência de produção foi migrada de SQLite local para PostgreSQL no Neon, integrado à Vercel. As migrações SQLite anteriores foram preservadas em `prisma/migrations-sqlite/`; a baseline PostgreSQL está em `prisma/migrations/`. Os 69 testes de integração agora usam PostgreSQL efêmero em memória e continuam sem acessar dados reais. O banco SQLite original foi preservado como fonte auditável da migração e possui backup externo ao repositório.

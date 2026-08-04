@@ -23,7 +23,6 @@ import {
   DIAS_SEMANA,
   DURACOES_PADRAO,
   FORMAS_PAGAMENTO,
-  ULTIMO_BACKUP_FICTICIO,
   type ConfiguracoesState,
   type DiaSemana,
   type SessaoExpiracao,
@@ -542,16 +541,27 @@ export default function ConfiguracoesPage() {
       </SettingsCard>
 
       <SettingsCard icon={DatabaseIcon} title={c.backup.titulo} description={c.backup.descricao}>
-        <p className="text-sm text-foreground/70">
-          {c.backup.ultimoBackup}: <span className="font-medium text-foreground">{ULTIMO_BACKUP_FICTICIO[locale]}</span>
-        </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <button type="button" className={buttonSecondaryClass}>
-            {c.backup.criarBackup}
-          </button>
-          <button type="button" className={buttonSecondaryClass}>
-            {c.backup.exportarDados}
-          </button>
+        <div className="rounded-xl border border-border bg-background p-4">
+          <p className="text-sm font-medium text-foreground">{c.backup.protecaoAutomatica}</p>
+          <p className="mt-1 text-xs text-foreground/55">{c.backup.protecaoAutomaticaDescricao}</p>
+        </div>
+        <div>
+          <p className="mb-3 text-sm font-medium text-foreground">{c.backup.downloads}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <a href="/api/exportacao?formato=json" download className={buttonSecondaryClass}>
+              {c.backup.backupCompleto}
+            </a>
+            {(["clientes", "servicos", "agenda", "atendimentos", "financeiro"] as const).map((dados) => (
+              <a
+                key={dados}
+                href={`/api/exportacao?formato=csv&dados=${dados}`}
+                download
+                className={buttonSecondaryClass}
+              >
+                {c.backup.csv[dados]}
+              </a>
+            ))}
+          </div>
         </div>
         <p className="text-xs text-foreground/50">{c.backup.aviso}</p>
       </SettingsCard>

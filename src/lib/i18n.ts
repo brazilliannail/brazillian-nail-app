@@ -909,11 +909,20 @@ export const dictionary = {
       },
       backup: {
         titulo: "Backup e dados",
-        descricao: "Cópias de segurança e exportação de dados.",
-        ultimoBackup: "Último backup",
-        criarBackup: "Criar backup agora",
-        exportarDados: "Exportar dados",
-        aviso: "Essas funções ainda não são reais — serão implementadas quando o Supabase for configurado.",
+        descricao: "Recuperação automática e downloads privados dos dados.",
+        protecaoAutomatica: "Proteção automática ativa no Neon",
+        protecaoAutomaticaDescricao:
+          "O banco mantém recuperação nativa. Além disso, baixe periodicamente o backup completo e guarde-o em uma pasta privada.",
+        downloads: "Exportação manual",
+        backupCompleto: "Backup completo (JSON)",
+        csv: {
+          clientes: "Clientes (CSV)",
+          servicos: "Serviços (CSV)",
+          agenda: "Agenda (CSV)",
+          atendimentos: "Atendimentos (CSV)",
+          financeiro: "Financeiro (CSV)",
+        },
+        aviso: "Os arquivos podem conter dados pessoais. Não compartilhe e guarde-os somente em local privado.",
       },
       acoes: {
         salvar: "Salvar alterações",
@@ -1838,11 +1847,20 @@ export const dictionary = {
       },
       backup: {
         titulo: "Backup and data",
-        descricao: "Safety copies and data export.",
-        ultimoBackup: "Last backup",
-        criarBackup: "Create backup now",
-        exportarDados: "Export data",
-        aviso: "These functions aren't real yet — they'll be implemented once Supabase is set up.",
+        descricao: "Automatic recovery and private data downloads.",
+        protecaoAutomatica: "Automatic Neon protection is active",
+        protecaoAutomaticaDescricao:
+          "The database includes native recovery. Also download the full backup periodically and keep it in a private folder.",
+        downloads: "Manual export",
+        backupCompleto: "Full backup (JSON)",
+        csv: {
+          clientes: "Clients (CSV)",
+          servicos: "Services (CSV)",
+          agenda: "Schedule (CSV)",
+          atendimentos: "Appointments (CSV)",
+          financeiro: "Financial (CSV)",
+        },
+        aviso: "Files may contain personal data. Do not share them and store them only in a private location.",
       },
       acoes: {
         salvar: "Save changes",

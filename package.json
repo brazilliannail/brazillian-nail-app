@@ -9,6 +9,7 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit --incremental false",
     "db:migrate:neon": "node scripts/migrate-sqlite-to-postgres.mjs",
     "test": "vitest run",
     "test:watch": "vitest"

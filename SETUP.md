@@ -122,3 +122,15 @@ git push origin main
    ```
 
 O resultado esperado é a conta `brazilliannail`, o remote `origin` apontando para `brazillian-nail-app` e a branch `main`.
+
+## Serviços atuais
+
+- **Vercel:** hospeda o aplicativo em produção no plano Hobby.
+- **Neon PostgreSQL:** armazena os dados no plano Free e fornece a autenticação por código de e-mail.
+- **GitHub Actions:** executa tipos, lint e testes automaticamente a cada push para `main`.
+
+As variáveis privadas de Vercel, Neon e autenticação não devem ser copiadas para documentação, commits, mensagens ou screenshots. Em outro Mac, solicite acesso autorizado e crie um `.env.local`; nunca reutilize valores publicados ou salve esse arquivo no Git.
+
+## Backup
+
+A exportação manual fica em **Configurações → Backup e dados**. Os arquivos baixados contêm dados pessoais e devem ser guardados em pasta privada. Para a rotina e recuperação, consulte `BACKUP_RESTORE.md`.
