@@ -9,7 +9,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authClient={authClient}
       redirectTo="/"
       emailOTP
-      credentials={{ forgotPassword: true }}
+      credentials={false}
+      signUp={false}
       defaultTheme="light"
     >
       {children}
