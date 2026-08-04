@@ -10,6 +10,8 @@
 - proteção contra fórmulas maliciosas nos CSVs;
 - cabeçalhos contra incorporação em iframe, detecção incorreta de conteúdo e acesso desnecessário a câmera, microfone e localização;
 - testes automáticos no GitHub sem acesso ao banco de produção.
+- CodeQL do GitHub ativo para analisar JavaScript/TypeScript e workflows;
+- Dependabot semanal limitado a propostas de atualização, sempre sujeito aos testes antes de qualquer merge.
 
 ## Dependências
 

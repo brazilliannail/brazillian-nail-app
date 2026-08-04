@@ -10,6 +10,7 @@
 - CI do GitHub configurada para executar typecheck, lint e testes em cada push/pull request de `main`, sem conectar ao banco de produção.
 - Documentação principal atualizada em `README.md`, `SETUP.md` e `BACKUP_RESTORE.md`.
 - Segunda rodada de manutenção: 8 avisos de lint removidos; cabeçalhos de segurança e atalho de acessibilidade adicionados; suíte ampliada para **77 testes** com autorização e exportação; dependências compatíveis atualizadas. O `npm audit` passou de 13 para 4 alertas, todos transitivos do Neon Auth beta e documentados em `SECURITY.md` — correção forçada não aplicada para não quebrar o login em produção.
+- Terceira rodada preventiva: CodeQL gratuito ativado no GitHub, Dependabot semanal e controlado configurado, rotina criada em `MAINTENANCE.md`, validação de Configurações isolada e coberta por testes e novos cenários financeiros adicionados sem mudar nenhuma regra de negócio. Suíte ampliada para **84 testes**, todos aprovados.
 
 > Retrato do estado real do projeto em 2026-07-29, produzido por revisão de código (não por relato de memória). Serve como roadmap oficial das próximas etapas. Nenhum código foi alterado para produzir este documento. Substitui a versão anterior deste arquivo (de 2026-07-14), que descrevia a fase de protótipo 100% mock — o projeto já avançou para persistência real em SQLite desde então.
 

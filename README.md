@@ -45,6 +45,7 @@ Os downloads nunca incluem credenciais ou tabelas internas de autenticação. Co
 ## Segurança e manutenção
 
 Os controles ativos, a análise das dependências de autenticação e o procedimento para incidentes estão em [SECURITY.md](SECURITY.md).
+A rotina semanal e mensal está em [MAINTENANCE.md](MAINTENANCE.md).
 
 ## Publicação
 

@@ -7,6 +7,9 @@ import {
   detalharPorServico,
   listarPendencias,
   calcularSaldoAbertoGlobal,
+  detalharPorFormaPagamento,
+  detalharPorStatusPagamento,
+  statusPagamentoDeAtendimento,
 } from "@/lib/financeiro-service";
 import type { Atendimento, AtendimentoStatus, ServicoRealizado } from "@/lib/atendimentos-mock";
 import type { LancamentoCaixa } from "@/lib/financeiro-repo";
@@ -154,5 +157,49 @@ describe("financeiro-service — estornos não compõem faturamento (PROJECT_STA
     expect(relatorio.servicosRealizados).toBe(1);
     expect(relatorio.valorServicos).toBe(0);
     expect(relatorio.quantidadeAtendimentos).toBe(0);
+  });
+});
+
+describe("financeiro-service — detalhamentos e limites do período", () => {
+  it("mapeia somente estados financeiros finalizados", () => {
+    expect(statusPagamentoDeAtendimento("finalizadoPago")).toBe("recebido");
+    expect(statusPagamentoDeAtendimento("finalizadoPendente")).toBe("pendente");
+    expect(statusPagamentoDeAtendimento("finalizadoParcial")).toBe("parcial");
+    expect(statusPagamentoDeAtendimento("finalizadoCortesia")).toBe("cortesia");
+    expect(statusPagamentoDeAtendimento("emAndamento")).toBeNull();
+    expect(statusPagamentoDeAtendimento("cancelado")).toBeNull();
+    expect(statusPagamentoDeAtendimento("estornado")).toBeNull();
+  });
+
+  it("detalha recebimentos líquidos por forma sem misturar gorjetas", () => {
+    const dataPagamento = new Date(2026, 7, 2, 12);
+    const base = {
+      atendimentoId: "ATD-000001",
+      dataPagamento,
+      observacoesPt: "",
+      observacoesEn: "",
+    };
+    const lancamentos: LancamentoCaixa[] = [
+      { ...base, id: "PGT-000001", natureza: "servico", tipo: "entrada", valor: 100, formaPagamento: "cartaoCredito" },
+      { ...base, id: "PGT-000002", natureza: "servico", tipo: "estorno", valor: 25, formaPagamento: "cartaoCredito" },
+      { ...base, id: "PGT-000003", natureza: "gorjeta", tipo: "entrada", valor: 20, formaPagamento: "cartaoCredito" },
+      { ...base, id: "PGT-000004", natureza: "servico", tipo: "entrada", valor: 40, formaPagamento: "dinheiro" },
+    ] as LancamentoCaixa[];
+
+    expect(detalharPorFormaPagamento(lancamentos, RANGE_HOJE)).toEqual([
+      { forma: "cartaoCredito", valor: 75 },
+      { forma: "dinheiro", valor: 40 },
+    ]);
+  });
+
+  it("detalha o valor bruto por status de pagamento e ignora estados não financeiros", () => {
+    const pago = criarAtendimento({ status: "finalizadoPago", servicos: [criarServico(100)] });
+    const parcial = criarAtendimento({ status: "finalizadoParcial", servicos: [criarServico(60)] });
+    const cancelado = criarAtendimento({ status: "cancelado", servicos: [criarServico(500)] });
+
+    expect(detalharPorStatusPagamento([pago, parcial, cancelado], RANGE_HOJE)).toEqual([
+      { status: "recebido", valor: 100 },
+      { status: "parcial", valor: 60 },
+    ]);
   });
 });
