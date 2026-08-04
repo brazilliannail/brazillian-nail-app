@@ -20,4 +20,4 @@
 - Não guardar credenciais, exportações ou dados de clientes no GitHub.
 - Não forçar atualização de autenticação sem testar todo o login.
 - Não restaurar banco, excluir dados ou alterar regra financeira sem autorização específica.
-- Dependabot apenas propõe atualizações. A publicação continua exigindo testes aprovados.
+- Dependabot apenas propõe atualizações patch/minor compatíveis; mudanças maiores são ignoradas. A publicação continua exigindo testes aprovados.
