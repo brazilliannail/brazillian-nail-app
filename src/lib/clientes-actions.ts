@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { mapClienteRow, includeRelacionamentosCliente } from "@/lib/clientes-repo";
 import { formatClienteId, type Cliente, type Contato } from "@/lib/clientes-mock";
 import type { Prisma } from "@/generated/prisma/client";
+import { requireRosangela } from "@/lib/auth/authorization";
 
 type Tx = Prisma.TransactionClient;
 
@@ -81,6 +82,7 @@ async function buscarClienteCompleto(tx: Tx, id: string): Promise<Cliente> {
 
 /** Cria uma cliente nova (com contatos, se informados) dentro de uma transação. */
 export async function createClienteAction(dados: Omit<Cliente, "id">): Promise<Cliente> {
+  await requireRosangela();
   const nome = dados.nome.trim();
   if (nome === "") {
     throw new Error("Nome é obrigatório.");
@@ -123,6 +125,7 @@ export async function createClienteAction(dados: Omit<Cliente, "id">): Promise<C
 
 /** Atualiza dados de uma cliente existente e sincroniza seus contatos, dentro de uma transação. */
 export async function updateClienteAction(cliente: Cliente): Promise<Cliente> {
+  await requireRosangela();
   const nome = cliente.nome.trim();
   if (nome === "") {
     throw new Error("Nome é obrigatório.");
@@ -160,6 +163,7 @@ export async function updateClienteAction(cliente: Cliente): Promise<Cliente> {
 
 /** Alterna o status (ativa/inativa) de uma cliente, dentro de uma transação. */
 export async function toggleStatusClienteAction(id: string): Promise<Cliente> {
+  await requireRosangela();
   const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.cliente.findUnique({ where: { id } });
     if (!existente) {

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapServicoRow } from "@/lib/servicos-repo";
 import type { Servico } from "@/lib/servicos-mock";
+import { requireRosangela } from "@/lib/auth/authorization";
 
 /** Próximo id de serviço, a partir de `numero_sequencial` (coluna indexada e única — mesmo
  * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
@@ -41,6 +42,7 @@ function validarServico(dados: Omit<Servico, "id">) {
 
 /** Cria um serviço novo no banco SQLite via Prisma. */
 export async function createServicoAction(dados: Omit<Servico, "id">): Promise<Servico> {
+  await requireRosangela();
   validarServico(dados);
 
   const { id, numeroSequencial } = await nextServicoId();
@@ -74,6 +76,7 @@ export async function createServicoAction(dados: Omit<Servico, "id">): Promise<S
 
 /** Atualiza um serviço existente no banco SQLite via Prisma. */
 export async function updateServicoAction(servico: Servico): Promise<Servico> {
+  await requireRosangela();
   validarServico(servico);
 
   const existente = await prisma.servico.findUnique({ where: { id: servico.id } });
@@ -108,6 +111,7 @@ export async function updateServicoAction(servico: Servico): Promise<Servico> {
 
 /** Alterna o status (ativo/inativo) de um serviço. */
 export async function toggleStatusServicoAction(id: string): Promise<Servico> {
+  await requireRosangela();
   const existente = await prisma.servico.findUnique({ where: { id } });
   if (!existente) {
     throw new Error("Serviço não encontrado.");

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { LembreteStatus } from "@/lib/lembretes-mock";
 import type { IdiomaContato } from "@/lib/clientes-mock";
+import { requireRosangela } from "@/lib/auth/authorization";
 
 type Tx = Prisma.TransactionClient;
 
@@ -19,6 +20,7 @@ async function nextMensagemLogId(tx: Tx): Promise<{ id: string; numeroSequencial
  * Ao marcar como "enviado", registra `enviadoEm` e confirma qualquer mensagem ainda "preparada"
  * ligada a este lembrete em `mensagens_log` (ver DATABASE_DESIGN.md §4.10). */
 export async function updateStatusLembreteAction(id: string, status: LembreteStatus): Promise<void> {
+  await requireRosangela();
   const existente = await prisma.lembrete.findUnique({ where: { id } });
   if (!existente) {
     throw new Error("Lembrete não encontrado.");
@@ -46,12 +48,14 @@ export async function updateStatusLembreteAction(id: string, status: LembreteSta
 
 /** Atualiza o texto personalizado do lembrete para o contato principal (sobrepõe o template padrão). */
 export async function updateMensagemPersonalizadaAction(id: string, mensagem: string): Promise<void> {
+  await requireRosangela();
   await prisma.lembrete.update({ where: { id }, data: { mensagemPersonalizada: mensagem } });
   revalidatePath("/lembretes");
 }
 
 /** Atualiza o texto personalizado do lembrete para o contato secundário. */
 export async function updateMensagemPersonalizadaSecundarioAction(id: string, mensagem: string): Promise<void> {
+  await requireRosangela();
   await prisma.lembrete.update({ where: { id }, data: { mensagemPersonalizadaSecundario: mensagem } });
   revalidatePath("/lembretes");
 }
@@ -69,6 +73,7 @@ export async function registrarMensagemPreparadaAction(dados: {
   idioma: IdiomaContato;
   texto: string;
 }): Promise<void> {
+  await requireRosangela();
   const lembrete = await prisma.lembrete.findUnique({
     where: { id: dados.lembreteId },
     include: { agendamento: { select: { clienteId: true } } },

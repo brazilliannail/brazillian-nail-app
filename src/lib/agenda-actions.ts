@@ -8,6 +8,7 @@ import type { StatusKey } from "@/lib/mock-data";
 import { mmddyyyyToISO, parseDateISO } from "@/lib/date";
 import { getConfiguracoes } from "@/lib/configuracoes-repo";
 import { expedienteDeConfiguracoes, diaSemanaDeData, type Expediente } from "@/lib/configuracoes-mock";
+import { requireRosangela } from "@/lib/auth/authorization";
 
 /** Próximo id de agendamento, a partir de `numero_sequencial` (coluna indexada e única — mesmo
  * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
@@ -58,6 +59,7 @@ async function existeConflito(
  * funcionamento, de Configurações) e conflito de horário (se `agendaBloqueioConflito` estiver
  * ativo). */
 export async function createAgendamentoAction(dados: Omit<AgendaAppointment, "id">): Promise<AgendaAppointment> {
+  await requireRosangela();
   if (dados.clienteId.trim() === "") {
     throw new Error("Selecione uma cliente.");
   }
@@ -99,6 +101,7 @@ export async function createAgendamentoAction(dados: Omit<AgendaAppointment, "id
  * funcionamento, de Configurações) e conflito de horário (se `agendaBloqueioConflito` estiver
  * ativo). */
 export async function updateAgendamentoAction(agendamento: AgendaAppointment): Promise<AgendaAppointment> {
+  await requireRosangela();
   if (agendamento.clienteId.trim() === "") {
     throw new Error("Selecione uma cliente.");
   }
@@ -154,6 +157,7 @@ const TRANSICOES_STATUS_AGENDAMENTO: Partial<Record<StatusKey, StatusKey[]>> = {
 
 /** Altera apenas o status de um agendamento (confirmar, cancelar, marcar não compareceu). */
 export async function updateStatusAgendamentoAction(id: string, status: StatusKey): Promise<AgendaAppointment> {
+  await requireRosangela();
   const existente = await prisma.agendamento.findUnique({ where: { id } });
   if (!existente) {
     throw new Error("Agendamento não encontrado.");
@@ -187,6 +191,7 @@ export async function reagendarAgendamentoAction(
   novoInicioMin: number,
   novoFimMin: number,
 ): Promise<AgendaAppointment> {
+  await requireRosangela();
   const configuracoes = await getConfiguracoes();
   const expediente = expedienteDeConfiguracoes(configuracoes.agenda);
   validarHorario(novoInicioMin, novoFimMin, expediente);
@@ -206,7 +211,7 @@ export async function reagendarAgendamentoAction(
   if (
     configuracoes.agenda.bloqueioConflitoHorario &&
     (await existeConflito(dataIso, novoInicioMin, novoFimMin, id))
-  ) {
+) {
     throw new Error("Já existe um agendamento nesse horário.");
   }
 

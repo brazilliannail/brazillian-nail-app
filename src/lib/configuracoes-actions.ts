@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { mapConfiguracaoRow, stateToRow } from "@/lib/configuracoes-repo";
 import type { ConfiguracoesState } from "@/lib/configuracoes-mock";
 import { parseTimeToMinutes } from "@/lib/date";
+import { requireRosangela } from "@/lib/auth/authorization";
 
 /** Formato aceito para `horarioAbertura`/`horarioFechamento`: "H:MM AM/PM" (ex.: "9:00 AM").
  * `horarioAbertura`/`horarioFechamento` são campos de texto livre na tela de Configurações — sem
@@ -53,6 +54,7 @@ function validarConfiguracoes(dados: ConfiguracoesState) {
 
 /** Salva as Configurações no registro singleton (id 1) da tabela `configuracoes`. */
 export async function updateConfiguracoesAction(dados: ConfiguracoesState): Promise<ConfiguracoesState> {
+  await requireRosangela();
   validarConfiguracoes(dados);
 
   const row = await prisma.configuracao.update({ where: { id: 1 }, data: stateToRow(dados) });

@@ -18,6 +18,7 @@ import { formatMinutesAsTime, mmddyyyyToISO } from "@/lib/date";
 import { formatPagamentoId } from "@/lib/pagamentos-mock";
 import { calcularValorRecebidoServico } from "@/lib/pagamentos-repo";
 import type { Prisma } from "@/generated/prisma/client";
+import { requireRosangela } from "@/lib/auth/authorization";
 
 type Tx = Prisma.TransactionClient;
 
@@ -120,6 +121,7 @@ async function buscarAtendimentoCompleto(tx: Tx, id: string): Promise<Atendiment
 
 /** Cria um novo atendimento (sempre com status "emAndamento"), com seus serviços em snapshot. */
 export async function createAtendimentoAction(dados: Omit<Atendimento, "id">): Promise<Atendimento> {
+  await requireRosangela();
   validarAtendimento(dados);
 
   const resultado = await prisma.$transaction(async (tx) => {
@@ -185,6 +187,7 @@ export type IniciarAtendimentoResultado = {
 export async function iniciarAtendimentoDoAgendamentoAction(
   agendamentoId: string,
 ): Promise<IniciarAtendimentoResultado> {
+  await requireRosangela();
   const resultado = await prisma.$transaction(async (tx) => {
     const agendamento = await tx.agendamento.findUnique({ where: { id: agendamentoId } });
     if (!agendamento) {
@@ -273,6 +276,7 @@ export async function iniciarAtendimentoDoAgendamentoAction(
  * lançamento no ledger), nunca por aqui.
  */
 export async function updateAtendimentoAction(atendimento: Atendimento): Promise<Atendimento> {
+  await requireRosangela();
   validarAtendimento(atendimento);
 
   const resultado = await prisma.$transaction(async (tx) => {
@@ -385,6 +389,7 @@ function calcularStatusFinal(devido: number, valorRecebido: number, statusEnviad
  * separada, nunca gravados como coluna em `atendimentos`.
  */
 export async function concluirAtendimentoAction(id: string, dados: ConcluirDados): Promise<AtendimentoComAgenda> {
+  await requireRosangela();
   if (dados.valorRecebido < 0) {
     throw new Error("O valor recebido não pode ser negativo.");
   }
@@ -457,6 +462,7 @@ export async function concluirAtendimentoAction(id: string, dados: ConcluirDados
  * implícita no status.
  */
 export async function cancelarAtendimentoAction(id: string): Promise<AtendimentoComAgenda> {
+  await requireRosangela();
   const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id },
@@ -497,6 +503,7 @@ export async function cancelarAtendimentoAction(id: string): Promise<Atendimento
  * ou apaga os lançamentos originais.
  */
 export async function estornarAtendimentoAction(id: string): Promise<Atendimento> {
+  await requireRosangela();
   const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.atendimento.findUnique({
       where: { id },
@@ -573,6 +580,7 @@ export async function registrarPagamentoAdicionalAction(
   atendimentoId: string,
   dados: RegistrarPagamentoAdicionalDados,
 ): Promise<Atendimento> {
+  await requireRosangela();
   if (dados.valor < 0) {
     throw new Error("O valor não pode ser negativo.");
   }
@@ -799,6 +807,7 @@ export async function corrigirLancamentoAction(
   pagamentoId: string,
   dadosCorretos: CorrigirLancamentoDados,
 ): Promise<CorrigirLancamentoResultado> {
+  await requireRosangela();
   const resultado = await prisma.$transaction((tx) => executarCorrecaoLancamento(tx, pagamentoId, dadosCorretos));
 
   revalidatePath("/", "layout");
@@ -813,6 +822,7 @@ export async function corrigirLancamentoAction(
 export async function corrigirLancamentosAction(
   correcoes: { pagamentoId: string; dados: CorrigirLancamentoDados }[],
 ): Promise<CorrigirLancamentoResultado[]> {
+  await requireRosangela();
   const resultados = await prisma.$transaction(async (tx) => {
     const acumulado: CorrigirLancamentoResultado[] = [];
     for (const { pagamentoId, dados } of correcoes) {

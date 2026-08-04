@@ -4,11 +4,17 @@ import { useLanguage } from "@/components/LanguageProvider";
 import { useFinancialVisibility } from "@/components/FinancialVisibilityProvider";
 import { GlobeIcon, EyeIcon, EyeOffIcon } from "@/components/icons";
 import { formatDateMMDDYYYY } from "@/lib/date";
+import { authClient } from "@/lib/auth/client";
 
 export function Header() {
   const { locale, toggleLocale, t } = useLanguage();
   const { visible, toggleVisible } = useFinancialVisibility();
   const today = formatDateMMDDYYYY(new Date());
+
+  async function sair() {
+    await authClient.signOut();
+    window.location.assign("/auth/sign-in");
+  }
 
   return (
     <header className="sticky top-0 z-10 flex h-12 items-center justify-between gap-2 border-b border-border bg-surface/95 px-3 backdrop-blur sm:h-16 sm:gap-3 sm:px-6">
@@ -46,12 +52,15 @@ export function Header() {
           {visible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
         </button>
 
-        <span
-          aria-label={t.header.profile}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground/70 sm:h-9 sm:w-9 sm:text-sm"
+        <button
+          type="button"
+          onClick={sair}
+          aria-label="Sair do aplicativo"
+          title="Sair"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground/70 transition-colors hover:bg-brand hover:text-white sm:h-9 sm:w-9 sm:text-sm"
         >
           R
-        </span>
+        </button>
       </div>
     </header>
   );

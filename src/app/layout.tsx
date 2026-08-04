@@ -18,6 +18,9 @@ import { getAtendimentos } from "@/lib/atendimentos-repo";
 import { getLancamentosCaixa } from "@/lib/financeiro-repo";
 import { getConfiguracoes } from "@/lib/configuracoes-repo";
 import { getLembretesAmanha } from "@/lib/lembretes-repo";
+import { AuthProvider } from "@/components/AuthProvider";
+import { auth } from "@/lib/auth/server";
+import { isRosangela } from "@/lib/auth/authorization";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +46,33 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { data: session } = await auth.getSession();
+
+  if (!session?.user) {
+    return (
+      <html lang="pt" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+        <body className="min-h-full">
+          <AuthProvider>{children}</AuthProvider>
+        </body>
+      </html>
+    );
+  }
+
+  if (!isRosangela(session.user.email)) {
+    return (
+      <html lang="pt" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+        <body className="flex min-h-screen items-center justify-center bg-background px-4">
+          <div className="max-w-md rounded-2xl border border-border bg-surface p-8 text-center shadow-sm">
+            <h1 className="text-xl font-semibold">Acesso não autorizado</h1>
+            <p className="mt-2 text-sm text-foreground/60">
+              Este aplicativo está restrito à conta da Rosangela.
+            </p>
+          </div>
+        </body>
+      </html>
+    );
+  }
+
   // configuracoesIniciais precisa vir antes de getLembretesAmanha: a geração automática do dia
   // respeita `lembretes.ativarLembretesDiaAnterior`, então as duas consultas não podem ser
   // paralelizadas no mesmo Promise.all.
@@ -70,6 +100,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <AuthProvider>
         <LanguageProvider>
           <ClientesProvider clientesIniciais={clientesIniciais}>
             <ServicosProvider servicosIniciais={servicosIniciais}>
@@ -89,6 +120,7 @@ export default async function RootLayout({
             </ServicosProvider>
           </ClientesProvider>
         </LanguageProvider>
+        </AuthProvider>
       </body>
     </html>
   );
