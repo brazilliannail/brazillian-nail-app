@@ -1,5 +1,7 @@
 # Backup e recuperação
 
+> O formato do arquivo é verificado automaticamente pelos testes. Essa inspeção não grava dados e não autoriza uma restauração direta em produção.
+
 ## Proteções disponíveis
 
 O aplicativo utiliza duas camadas gratuitas:

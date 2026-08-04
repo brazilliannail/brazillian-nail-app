@@ -127,7 +127,7 @@ O resultado esperado é a conta `brazilliannail`, o remote `origin` apontando pa
 
 - **Vercel:** hospeda o aplicativo em produção no plano Hobby.
 - **Neon PostgreSQL:** armazena os dados no plano Free e fornece a autenticação por código de e-mail.
-- **GitHub Actions:** executa tipos, lint e testes automaticamente a cada push para `main`.
+- **GitHub Actions:** executa tipos, lint e testes a cada push para `main`; uma certificação noturna também confirma o build.
 
 As variáveis privadas de Vercel, Neon e autenticação não devem ser copiadas para documentação, commits, mensagens ou screenshots. Em outro Mac, solicite acesso autorizado e crie um `.env.local`; nunca reutilize valores publicados ou salve esse arquivo no Git.
 

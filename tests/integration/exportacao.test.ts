@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { validarBackupCompleto } from "@/lib/backup-validation";
 import { obterBackupCompleto, obterCsv } from "@/lib/exportacao";
 
 describe("exportação de dados", () => {
@@ -11,6 +12,12 @@ describe("exportação de dados", () => {
     expect(chaves).toContain("configuracoes");
     expect(chaves).toContain("clientes");
     expect(chaves.some((chave) => /auth|senha|secret|token/i.test(chave))).toBe(false);
+  });
+
+  it("gera um backup que passa pela validação preventiva de restauração", async () => {
+    const backup = await obterBackupCompleto();
+    const copiaComoArquivo = JSON.parse(JSON.stringify(backup));
+    expect(validarBackupCompleto(copiaComoArquivo)).toMatchObject({ valido: true });
   });
 
   it("gera todos os CSVs com cabeçalho mesmo quando não há dados operacionais", async () => {

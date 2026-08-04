@@ -33,6 +33,8 @@ npm run build
 
 O workflow em `.github/workflows/ci.yml` executa tipos, lint e testes automaticamente em pushes e pull requests para `main`, sem usar o banco de produção.
 
+O workflow `.github/workflows/nightly.yml` repete diariamente essas verificações e também confirma o build de produção com valores locais sem acesso a dados reais.
+
 ## Backup e exportação
 
 Na tela **Configurações → Backup e dados**, a usuária autenticada pode baixar:

@@ -1,5 +1,9 @@
 # Rotina de manutenção
 
+## Certificação noturna
+
+O fluxo **Certificação noturna** é executado diariamente e também pode ser iniciado manualmente no GitHub. Ele confirma tipos, qualidade do código, testes isolados e build sem usar credenciais ou dados reais.
+
 ## Toda semana
 
 - Conferir se GitHub Actions e CodeQL estão verdes.
