@@ -1,9 +1,25 @@
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+  brazillianNailTestAdapter?: unknown;
+};
 
-const adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL! });
+const connectionString =
+  process.env.DATABASE_POSTGRES_URL ??
+  process.env.POSTGRES_URL ??
+  process.env.DATABASE_URL;
+
+if (!globalForPrisma.brazillianNailTestAdapter && !connectionString?.startsWith("postgres")) {
+  throw new Error(
+    "Banco PostgreSQL não configurado. Defina DATABASE_POSTGRES_URL, POSTGRES_URL ou DATABASE_URL.",
+  );
+}
+
+const adapter = globalForPrisma.brazillianNailTestAdapter
+  ? (globalForPrisma.brazillianNailTestAdapter as PrismaPg)
+  : new PrismaPg({ connectionString: connectionString! });
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 

@@ -2,6 +2,8 @@
 
 > Retrato do estado real do projeto em 2026-07-29, produzido por revisão de código (não por relato de memória). Serve como roadmap oficial das próximas etapas. Nenhum código foi alterado para produzir este documento. Substitui a versão anterior deste arquivo (de 2026-07-14), que descrevia a fase de protótipo 100% mock — o projeto já avançou para persistência real em SQLite desde então.
 
+> **Atualização de infraestrutura — 2026-08-03:** a persistência de produção foi migrada de SQLite local para PostgreSQL no Neon, integrado à Vercel. As migrações SQLite anteriores foram preservadas em `prisma/migrations-sqlite/`; a baseline PostgreSQL está em `prisma/migrations/`. Os 69 testes de integração agora usam PostgreSQL efêmero em memória e continuam sem acessar dados reais. O banco SQLite original foi preservado como fonte auditável da migração e possui backup externo ao repositório.
+
 ---
 
 ## 1. Módulos concluídos (100% implementados e testados)
