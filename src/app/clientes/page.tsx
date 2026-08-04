@@ -57,6 +57,7 @@ export default function ClientesPage() {
         setSelectedId(cliente.id);
       } else {
         const { id: _idPlaceholder, ...dados } = cliente;
+        void _idPlaceholder;
         const novoId = await addCliente(dados);
         setSelectedId(novoId);
       }

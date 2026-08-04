@@ -227,7 +227,6 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
             contato={contatoPrincipal}
             onChange={setContatoPrincipal}
             erroTelefone={erroTelefonePrincipal}
-            f={f}
             c={c}
           />
 
@@ -253,7 +252,6 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
                 contato={contatoSecundario}
                 onChange={setContatoSecundario}
                 erroTelefone={erroTelefoneSecundario}
-                f={f}
                 c={c}
               />
             </div>
@@ -345,11 +343,10 @@ type ContatoFieldsetProps = {
   contato: Contato;
   onChange: (contato: Contato) => void;
   erroTelefone: string | null;
-  f: ReturnType<typeof useLanguage>["t"]["clientes"]["formulario"];
   c: ReturnType<typeof useLanguage>["t"]["clientes"];
 };
 
-function ContatoFieldset({ titulo, contato, onChange, erroTelefone, f, c }: ContatoFieldsetProps) {
+function ContatoFieldset({ titulo, contato, onChange, erroTelefone, c }: ContatoFieldsetProps) {
   function patch(valores: Partial<Contato>) {
     onChange({ ...contato, ...valores });
   }

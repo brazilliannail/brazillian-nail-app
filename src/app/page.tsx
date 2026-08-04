@@ -86,6 +86,7 @@ export default function Home() {
     try {
       setErroAgendamento(null);
       const { id: _idPlaceholder, ...dados } = agendamento;
+      void _idPlaceholder;
       await addAgendamento(dados);
       setFormAberto(null);
     } catch (error) {
@@ -97,6 +98,7 @@ export default function Home() {
     try {
       setErroCliente(null);
       const { id: _idPlaceholder, ...dados } = cliente;
+      void _idPlaceholder;
       await addCliente(dados);
       setFormAberto(null);
     } catch (error) {
@@ -108,6 +110,7 @@ export default function Home() {
     try {
       setErroAtendimento(null);
       const { id: _idPlaceholder, ...dados } = atendimento;
+      void _idPlaceholder;
       await addAtendimento(dados);
       setFormAberto(null);
     } catch (error) {

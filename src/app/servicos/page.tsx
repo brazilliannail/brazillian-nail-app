@@ -54,6 +54,7 @@ export default function ServicosPage() {
         setSelectedId(servico.id);
       } else {
         const { id: _idPlaceholder, ...dados } = servico;
+        void _idPlaceholder;
         const novoId = await addServico(dados);
         setSelectedId(novoId);
       }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useFinancialVisibility } from "@/components/FinancialVisibilityProvider";
 import { GlobeIcon, EyeIcon, EyeOffIcon } from "@/components/icons";
@@ -7,13 +8,15 @@ import { formatDateMMDDYYYY } from "@/lib/date";
 import { authClient } from "@/lib/auth/client";
 
 export function Header() {
+  const router = useRouter();
   const { locale, toggleLocale, t } = useLanguage();
   const { visible, toggleVisible } = useFinancialVisibility();
   const today = formatDateMMDDYYYY(new Date());
 
   async function sair() {
     await authClient.signOut();
-    window.location.assign("/auth/sign-in");
+    router.replace("/auth/sign-in");
+    router.refresh();
   }
 
   return (

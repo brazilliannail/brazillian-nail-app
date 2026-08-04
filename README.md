@@ -42,6 +42,10 @@ Na tela **Configurações → Backup e dados**, a usuária autenticada pode baix
 
 Os downloads nunca incluem credenciais ou tabelas internas de autenticação. Como contêm dados pessoais, devem ficar em pasta privada. O Neon também fornece sua própria recuperação do banco. Veja [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
+## Segurança e manutenção
+
+Os controles ativos, a análise das dependências de autenticação e o procedimento para incidentes estão em [SECURITY.md](SECURITY.md).
+
 ## Publicação
 
 O repositório usa `main` e o remote `origin`. Cada push autorizado para `main` inicia um deployment na Vercel. Consulte [SETUP.md](SETUP.md) antes de fazer commit ou push.

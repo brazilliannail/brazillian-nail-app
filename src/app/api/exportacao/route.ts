@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EXPORT_DATASETS, obterBackupCompleto, obterCsv, type ExportDataset } from "@/lib/exportacao";
+import { isExportDataset, obterBackupCompleto, obterCsv } from "@/lib/exportacao";
 import { requireRosangela } from "@/lib/auth/authorization";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const dataset = request.nextUrl.searchParams.get("dados") as ExportDataset | null;
-    if (formato !== "csv" || !dataset || !EXPORT_DATASETS.includes(dataset)) {
+    const dataset = request.nextUrl.searchParams.get("dados");
+    if (formato !== "csv" || !isExportDataset(dataset)) {
       return NextResponse.json({ erro: "Formato de exportação inválido." }, { status: 400 });
     }
 

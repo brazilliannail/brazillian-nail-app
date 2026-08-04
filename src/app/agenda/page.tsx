@@ -104,6 +104,7 @@ export default function AgendaPage() {
         setSelectedId(agendamento.id);
       } else {
         const { id: _idPlaceholder, ...dados } = agendamento;
+        void _idPlaceholder;
         const novoId = await addAgendamento(dados);
         setSelectedId(novoId);
         if (agendamento.data !== dataSelecionada) {

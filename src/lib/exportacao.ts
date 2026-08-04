@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 export const EXPORT_DATASETS = ["clientes", "servicos", "agenda", "atendimentos", "financeiro"] as const;
 export type ExportDataset = (typeof EXPORT_DATASETS)[number];
 
+export function isExportDataset(valor: string | null): valor is ExportDataset {
+  return valor !== null && EXPORT_DATASETS.includes(valor as ExportDataset);
+}
+
 export function csvSeguro(valor: unknown): string {
   if (valor === null || valor === undefined) return "";
   const texto = valor instanceof Date ? valor.toISOString() : String(valor);

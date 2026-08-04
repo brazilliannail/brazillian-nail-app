@@ -85,6 +85,7 @@ export default function AtendimentosPage() {
         setSelectedId(atendimento.id);
       } else {
         const { id: _idPlaceholder, ...dados } = atendimento;
+        void _idPlaceholder;
         const novoId = await addAtendimento(dados);
         setSelectedId(novoId);
       }
