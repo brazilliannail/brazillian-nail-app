@@ -118,6 +118,16 @@ export async function updateAgendamentoAction(agendamento: AgendaAppointment): P
   const dataIso = mmddyyyyToISO(agendamento.data);
   validarDiaFuncionamento(dataIso, expediente);
 
+  // Uma confirmação vale apenas para a data, a janela de horário e o serviço que a cliente
+  // aceitou. Se qualquer um desses dados mudar, o agendamento precisa ser confirmado novamente.
+  // Alterações administrativas (valor, cliente ou observações) não invalidam a confirmação.
+  const exigeReconfirmacao =
+    existente.status === "confirmado" &&
+    (existente.data !== dataIso ||
+      existente.inicioMin !== agendamento.inicioMin ||
+      existente.fimMin !== agendamento.fimMin ||
+      existente.servicoId !== agendamento.servicoId);
+
   if (
     configuracoes.agenda.bloqueioConflitoHorario &&
     (await existeConflito(dataIso, agendamento.inicioMin, agendamento.fimMin, agendamento.id))
@@ -133,6 +143,7 @@ export async function updateAgendamentoAction(agendamento: AgendaAppointment): P
       data: dataIso,
       inicioMin: agendamento.inicioMin,
       fimMin: agendamento.fimMin,
+      status: exigeReconfirmacao ? "aguardando" : existente.status,
       valorEstimado: agendamento.valorEstimado,
       observacoesPt: agendamento.observacoesPt.trim(),
       observacoesEn: agendamento.observacoesEn.trim(),
@@ -175,7 +186,8 @@ export async function updateStatusAgendamentoAction(id: string, status: StatusKe
 
 /**
  * Status de origem a partir dos quais reagendar é permitido (PROJECT_STATUS.md §13 item 1):
- * `aguardando`/`confirmado` mantêm o status; `cancelado` é reativado para `aguardando` ao
+ * `aguardando` mantém o status; `confirmado` volta para `aguardando`, pois a nova data/janela
+ * ainda não foi confirmada pela cliente; `cancelado` também é reativado para `aguardando` ao
  * reagendar ("reativar e reagendar"). `emAtendimento`/`concluido` nunca reagendam por aqui —
  * já têm um Atendimento formal vinculado. `naoCompareceu` também fica de fora: reaproveitar o
  * mesmo registro apagaria o histórico da falta; a UI deve levar à criação de um novo agendamento.
@@ -184,7 +196,7 @@ const STATUS_REAGENDAVEIS = new Set<StatusKey>(["aguardando", "confirmado", "can
 
 /** Reagenda um agendamento existente para nova data/horário, validando expediente (horário + dia
  * de funcionamento, de Configurações), conflito de horário (se `agendaBloqueioConflito` estiver
- * ativo) e status de origem. Reativa `cancelado` para `aguardando` ao reagendar. */
+ * ativo) e status de origem. Reativa `cancelado` e exige reconfirmação de `confirmado`. */
 export async function reagendarAgendamentoAction(
   id: string,
   novaData: string,
@@ -221,7 +233,7 @@ export async function reagendarAgendamentoAction(
       data: dataIso,
       inicioMin: novoInicioMin,
       fimMin: novoFimMin,
-      status: existente.status === "cancelado" ? "aguardando" : existente.status,
+      status: "aguardando",
     },
   });
 

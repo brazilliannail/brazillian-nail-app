@@ -97,4 +97,41 @@ export type Cliente = {
   reengajamentoAtualizadoEm?: string | null;
   reengajamentoAdiadoAte?: string | null;
   reengajamentoObservacao?: string | null;
+  /** Derivado dos atendimentos/agendamentos atuais; nunca é persistido. */
+  elegivelReengajamento?: boolean;
+  /** Dia/mês do aniversário (sempre juntos quando informado). Ano é independente e opcional —
+   * nunca existe um campo de idade derivado: quando o ano está ausente, não há como calculá-la. */
+  aniversarioDia?: number | null;
+  aniversarioMes?: number | null;
+  aniversarioAno?: number | null;
 };
+
+/** Mesma regra usada em `ClienteFormModal.tsx` e `clientes-actions.ts`: aceita qualquer
+ * formatação (parênteses, espaços, traços, "+"), desde que reste ao menos 7 dígitos. Extraída
+ * aqui para não duplicar a checagem num terceiro lugar (ex.: gate do botão "Abrir WhatsApp" na
+ * Agenda) — nunca normaliza/reescreve o telefone armazenado, só valida. */
+export function telefoneValido(telefone: string): boolean {
+  return telefone.replace(/\D/g, "").length >= 7;
+}
+
+/** Extrai o primeiro nome de um nome completo, colapsando espaços extras. Retorna "" se vazio. */
+export function primeiroNome(nomeCompleto: string): string {
+  const partes = nomeCompleto.trim().split(/\s+/).filter(Boolean);
+  return partes[0] ?? "";
+}
+
+const DIAS_NO_MES = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/**
+ * Valida dia/mês do aniversário: nenhum informado é válido (aniversário não cadastrado); um
+ * informado sem o outro é inválido (dia e mês são sempre exigidos juntos); mês fora de 1-12 ou dia
+ * fora do intervalo do mês (considerando fevereiro com 29 dias, já que o ano é independente/pode
+ * não ser informado) é inválido.
+ */
+export function aniversarioDiaMesValido(dia: number | null, mes: number | null): boolean {
+  if (dia === null && mes === null) return true;
+  if (dia === null || mes === null) return false;
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) return false;
+  if (!Number.isInteger(dia) || dia < 1) return false;
+  return dia <= DIAS_NO_MES[mes - 1];
+}

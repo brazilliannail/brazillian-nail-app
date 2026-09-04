@@ -4,12 +4,15 @@ import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { Toggle } from "@/components/Toggle";
 import { CloseIcon, PlusIcon, UserXIcon, AlertIcon } from "@/components/icons";
-import type {
-  CanalPreferidoContato,
-  Cliente,
-  Contato,
-  IdiomaContato,
-  RelacaoContato,
+import {
+  aniversarioDiaMesValido,
+  primeiroNome,
+  telefoneValido,
+  type CanalPreferidoContato,
+  type Cliente,
+  type Contato,
+  type IdiomaContato,
+  type RelacaoContato,
 } from "@/lib/clientes-mock";
 
 type ClienteFormModalProps = {
@@ -40,10 +43,6 @@ function contatoInformado(contato: Contato) {
   return contato.nomeContato.trim() !== "" || contato.telefone.trim() !== "";
 }
 
-function telefoneValido(telefone: string) {
-  return telefone.replace(/\D/g, "").length >= 7;
-}
-
 function contatosIguais(a: Contato, b: Contato) {
   return (
     a.nomeContato === b.nomeContato &&
@@ -71,17 +70,61 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
   const [contatoSecundario, setContatoSecundario] = useState<Contato>(
     cliente?.contatoSecundario ?? { ...CONTATO_VAZIO }
   );
+  const [aniversarioDia, setAniversarioDia] = useState(
+    cliente?.aniversarioDia != null ? String(cliente.aniversarioDia) : ""
+  );
+  const [aniversarioMes, setAniversarioMes] = useState(
+    cliente?.aniversarioMes != null ? String(cliente.aniversarioMes) : ""
+  );
+  const [aniversarioAno, setAniversarioAno] = useState(
+    cliente?.aniversarioAno != null ? String(cliente.aniversarioAno) : ""
+  );
+
+  // Autopreenchimento de "como prefere ser chamada" e "nome do contato principal" a partir do
+  // primeiro nome só se aplica ao CRIAR uma cliente nova, e só até a profissional editar o campo
+  // manualmente pela primeira vez (mesmo que apague o valor) — a partir daí o autopreenchimento
+  // para de sobrescrever aquele campo. Ao editar uma cliente existente, nunca autopreenche.
+  const [nomePreferenciaEditadaManualmente, setNomePreferenciaEditadaManualmente] = useState(modo === "editar");
+  const [contatoPrincipalNomeEditadoManualmente, setContatoPrincipalNomeEditadoManualmente] = useState(
+    modo === "editar"
+  );
 
   const [erroNome, setErroNome] = useState<string | null>(null);
   const [erroTelefonePrincipal, setErroTelefonePrincipal] = useState<string | null>(null);
   const [erroTelefoneSecundario, setErroTelefoneSecundario] = useState<string | null>(null);
+  const [erroAniversario, setErroAniversario] = useState<string | null>(null);
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
+
+  function handleNomeChange(valor: string) {
+    setNome(valor);
+    if (modo !== "criar") return;
+    const primeiro = primeiroNome(valor);
+    if (!nomePreferenciaEditadaManualmente) setNomePreferencia(primeiro);
+    if (!contatoPrincipalNomeEditadoManualmente) {
+      setContatoPrincipal((atual) => ({ ...atual, nomeContato: primeiro }));
+    }
+  }
+
+  function handleNomePreferenciaChange(valor: string) {
+    setNomePreferenciaEditadaManualmente(true);
+    setNomePreferencia(valor);
+  }
+
+  function handleContatoPrincipalChange(novo: Contato) {
+    if (novo.nomeContato !== contatoPrincipal.nomeContato) {
+      setContatoPrincipalNomeEditadoManualmente(true);
+    }
+    setContatoPrincipal(novo);
+  }
 
   const houveAlteracoes =
     nome !== (cliente?.nome ?? "") ||
     nomePreferencia !== (cliente?.nomePreferencia ?? "") ||
     observacoesPt !== (cliente?.observacoesPt ?? "") ||
     observacoesEn !== (cliente?.observacoesEn ?? "") ||
+    aniversarioDia !== (cliente?.aniversarioDia != null ? String(cliente.aniversarioDia) : "") ||
+    aniversarioMes !== (cliente?.aniversarioMes != null ? String(cliente.aniversarioMes) : "") ||
+    aniversarioAno !== (cliente?.aniversarioAno != null ? String(cliente.aniversarioAno) : "") ||
     !contatosIguais(contatoPrincipal, cliente?.contatoPrincipal ?? CONTATO_VAZIO) ||
     temContatoSecundario !== Boolean(cliente?.contatoSecundario) ||
     (temContatoSecundario && !contatosIguais(contatoSecundario, cliente?.contatoSecundario ?? CONTATO_VAZIO));
@@ -103,7 +146,13 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
     const erroSecundario = temContatoSecundario ? validarContato(contatoSecundario) : null;
     setErroTelefoneSecundario(erroSecundario);
 
-    if (!nomeOk || erroPrincipal || erroSecundario) return false;
+    const diaNum = aniversarioDia.trim() === "" ? null : parseInt(aniversarioDia, 10);
+    const mesNum = aniversarioMes.trim() === "" ? null : parseInt(aniversarioMes, 10);
+    const anoNum = aniversarioAno.trim() === "" ? null : parseInt(aniversarioAno, 10);
+    const aniversarioOk = aniversarioDiaMesValido(diaNum, mesNum);
+    setErroAniversario(aniversarioOk ? null : f.erros.aniversarioInvalido);
+
+    if (!nomeOk || erroPrincipal || erroSecundario || !aniversarioOk) return false;
 
     const contatoPrincipalFinal = contatoInformado(contatoPrincipal) ? contatoPrincipal : null;
     const contatoSecundarioFinal =
@@ -125,6 +174,9 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
       avisosImportantesEn: [],
       valorPendente: 0,
       historico: [],
+      aniversarioDia: null,
+      aniversarioMes: null,
+      aniversarioAno: null,
     };
 
     onSave({
@@ -133,6 +185,9 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
       nomePreferencia: nomePreferencia.trim() === "" ? null : nomePreferencia.trim(),
       observacoesPt: observacoesPt.trim(),
       observacoesEn: observacoesEn.trim(),
+      aniversarioDia: diaNum,
+      aniversarioMes: mesNum,
+      aniversarioAno: anoNum,
       contatoPrincipal: contatoPrincipalFinal,
       contatoSecundario: contatoSecundarioFinal,
     });
@@ -185,7 +240,7 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
               <input
                 type="text"
                 value={nome}
-                onChange={(event) => setNome(event.target.value)}
+                onChange={(event) => handleNomeChange(event.target.value)}
                 className={inputClass}
               />
               {erroNome && <span className="text-xs font-medium text-red-600 dark:text-red-400">{erroNome}</span>}
@@ -195,11 +250,51 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
               <input
                 type="text"
                 value={nomePreferencia}
-                onChange={(event) => setNomePreferencia(event.target.value)}
+                onChange={(event) => handleNomePreferenciaChange(event.target.value)}
                 placeholder={f.nomePreferenciaPlaceholder}
                 className={inputClass}
               />
             </label>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-foreground/70">{f.aniversario}</span>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-foreground/60">{f.aniversarioDia}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={aniversarioDia}
+                    onChange={(event) => setAniversarioDia(event.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-foreground/60">{f.aniversarioMes}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={aniversarioMes}
+                    onChange={(event) => setAniversarioMes(event.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-foreground/60">{f.aniversarioAno}</span>
+                  <input
+                    type="number"
+                    value={aniversarioAno}
+                    onChange={(event) => setAniversarioAno(event.target.value)}
+                    placeholder={f.aniversarioAnoPlaceholder}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+              {erroAniversario && (
+                <span className="text-xs font-medium text-red-600 dark:text-red-400">{erroAniversario}</span>
+              )}
+            </div>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-foreground/70">{f.observacoesPt}</span>
               <textarea
@@ -225,7 +320,7 @@ export function ClienteFormModal({ modo, cliente, onClose, onSave, erroSalvar }:
           <ContatoFieldset
             titulo={f.secaoContatoPrincipal}
             contato={contatoPrincipal}
-            onChange={setContatoPrincipal}
+            onChange={handleContatoPrincipalChange}
             erroTelefone={erroTelefonePrincipal}
             c={c}
           />

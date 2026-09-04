@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useAgenda } from "@/components/AgendaProvider";
 import { useAtendimentos } from "@/components/AtendimentosProvider";
@@ -25,6 +26,7 @@ export default function AgendaPage() {
   const { agendamentos, addAgendamento, updateAgendamento, updateStatus, reagendar } = useAgenda();
   const { iniciarAtendimentoDoAgendamento } = useAtendimentos();
   const { configuracoes } = useConfiguracoes();
+  const router = useRouter();
   const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
   const [view, setView] = useState<ViewMode>("dia");
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -55,6 +57,30 @@ export default function AgendaPage() {
       setAvisoAtendimento({ id, criado });
     } catch (error) {
       setErroOperacao(error instanceof Error ? error.message : "Não foi possível iniciar o atendimento.");
+    } finally {
+      setIniciandoAtendimento(false);
+    }
+  }
+
+  /**
+   * "Concluir atendimento" pela Agenda: reutiliza integralmente `iniciarAtendimentoDoAgendamento`
+   * (mesma action idempotente — cria só se ainda não existir um atendimento ativo para este
+   * agendamento, senão devolve o existente) e depois leva a profissional para o fluxo normal de
+   * conclusão em Atendimentos (`?concluir=1` abre o `ConcluirAtendimentoModal` já existente lá).
+   * Não há aqui nenhuma lógica paralela de conclusão/pagamento/financeiro, nem forma de marcar o
+   * agendamento como "concluido" a partir da Agenda — isso só acontece dentro do Atendimento, via
+   * `concluirAtendimentoAction`, que sincroniza o agendamento de volta.
+   */
+  async function handleConcluirAtendimento(agendamentoId: string) {
+    if (iniciandoAtendimento) return;
+    try {
+      setErroOperacao(null);
+      setAvisoAtendimento(null);
+      setIniciandoAtendimento(true);
+      const { id } = await iniciarAtendimentoDoAgendamento(agendamentoId);
+      router.push(`/atendimentos?id=${id}&concluir=1`);
+    } catch (error) {
+      setErroOperacao(error instanceof Error ? error.message : "Não foi possível concluir o atendimento.");
     } finally {
       setIniciandoAtendimento(false);
     }
@@ -252,6 +278,7 @@ export default function AgendaPage() {
             onNovoAgendamento={() => setFormState({ modo: "criar" })}
             onEdit={() => setFormState({ modo: "editar", agendamento: selectedAppointment })}
             onIniciarAtendimento={() => handleIniciarAtendimento(selectedAppointment.id)}
+            onConcluirAtendimento={() => handleConcluirAtendimento(selectedAppointment.id)}
             iniciandoAtendimento={iniciandoAtendimento}
           />
         </div>
@@ -275,6 +302,7 @@ export default function AgendaPage() {
               onNovoAgendamento={() => setFormState({ modo: "criar" })}
               onEdit={() => setFormState({ modo: "editar", agendamento: selectedAppointment })}
               onIniciarAtendimento={() => handleIniciarAtendimento(selectedAppointment.id)}
+              onConcluirAtendimento={() => handleConcluirAtendimento(selectedAppointment.id)}
               iniciandoAtendimento={iniciandoAtendimento}
             />
           </div>

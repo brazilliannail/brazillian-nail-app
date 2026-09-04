@@ -20,6 +20,7 @@ import type { RegistrarPagamentoAdicionalDados, NovoLancamentoCaixa } from "@/li
 import type { LancamentoCaixa } from "@/lib/financeiro-repo";
 import { CashIcon, ScissorsIcon, WalletIcon, TagIcon, ClockIcon, CalendarIcon, AlertIcon } from "@/components/icons";
 import { formatDateMMDDYYYY, isSameDay, parseDateISO } from "@/lib/date";
+import { buildMensagemContato, whatsappHref } from "@/lib/mensagens";
 import {
   calcularAgregadoFinanceiro,
   calcularAgregadoDespesas,
@@ -62,7 +63,7 @@ export default function FinanceiroPage() {
   const router = useRouter();
   const { visible } = useFinancialVisibility();
   const { atendimentos, estornarAtendimento, registrarPagamentoAdicional, corrigirLancamentos } = useAtendimentos();
-  const { clientes } = useClientes();
+  const { clientes, registrarMensagemPreparada } = useClientes();
   const lancamentosCaixa = useLancamentosCaixa();
   const lancamentosDespesa = useLancamentosDespesa();
   const adicionarLancamentosCaixa = useAdicionarLancamentosCaixa();
@@ -173,6 +174,12 @@ export default function FinanceiroPage() {
     ? buscarAtendimentoFinanceiro(selectedId, atendimentos, clientesPorId, lancamentosCaixa)
     : null;
 
+  // O modal é derivado diretamente do id da ação. Não depende de o painel lateral terminar de
+  // selecionar/renderizar o mesmo atendimento antes — importante para o botão do próprio cartão.
+  const pagamentoParaRegistrar = registrandoPagamentoId
+    ? buscarAtendimentoFinanceiro(registrandoPagamentoId, atendimentos, clientesPorId, lancamentosCaixa)
+    : null;
+
   const lancamentosCorrigiveis = useMemo(
     () => (pagamentoSelecionado ? buscarLancamentosCorrigiveis(pagamentoSelecionado.atendimentoId, lancamentosCaixa) : null),
     [pagamentoSelecionado, lancamentosCaixa],
@@ -203,6 +210,7 @@ export default function FinanceiroPage() {
 
   function handleAbrirRegistrarPagamento(atendimentoId: string) {
     setErroRegistrarPagamento(null);
+    setSelectedId(atendimentoId);
     setRegistrandoPagamentoId(atendimentoId);
   }
 
@@ -248,6 +256,21 @@ export default function FinanceiroPage() {
 
   function handleAbrirCliente(clienteId: string) {
     router.push(`/clientes?id=${clienteId}`);
+  }
+
+  function contatoFinanceiro(clienteId: string) {
+    const cliente = clientesPorId.get(clienteId);
+    const contato = cliente?.contatoPrincipal;
+    if (!cliente || !contato?.receberLembretes || contato.canalPreferido === "sms") return null;
+
+    const texto = buildMensagemContato(contato.idioma, {
+      nome: cliente.nomePreferencia ?? cliente.nome,
+      data: null,
+      horario: null,
+      servicoPt: null,
+      servicoEn: null,
+    });
+    return { contato, texto, href: whatsappHref(contato.telefone, texto) };
   }
 
   return (
@@ -482,14 +505,31 @@ export default function FinanceiroPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-              {pendencias.map((pendente) => (
-                <ValorPendenteCard
-                  key={pendente.atendimentoId}
-                  pendente={pendente}
-                  selected={selectedId === pendente.atendimentoId}
-                  onSelect={() => setSelectedId(pendente.atendimentoId)}
-                />
-              ))}
+              {pendencias.map((pendente) => {
+                const whatsapp = contatoFinanceiro(pendente.clienteId);
+                return (
+                  <ValorPendenteCard
+                    key={pendente.atendimentoId}
+                    pendente={pendente}
+                    selected={selectedId === pendente.atendimentoId}
+                    onSelect={() => setSelectedId(pendente.atendimentoId)}
+                    onRegistrarPagamento={() => handleAbrirRegistrarPagamento(pendente.atendimentoId)}
+                    onAbrirAtendimento={() => handleAbrirAtendimento(pendente.atendimentoId)}
+                    onAbrirFicha={() => handleAbrirCliente(pendente.clienteId)}
+                    whatsappHref={whatsapp?.href || null}
+                    onAbrirWhatsapp={() => {
+                      if (!whatsapp) return;
+                      registrarMensagemPreparada({
+                        clienteId: pendente.clienteId,
+                        papel: "principal",
+                        canal: "whatsapp",
+                        idioma: whatsapp.contato.idioma,
+                        texto: whatsapp.texto,
+                      });
+                    }}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -533,11 +573,11 @@ export default function FinanceiroPage() {
         </div>
       )}
 
-      {pagamentoSelecionado && registrandoPagamentoId === pagamentoSelecionado.atendimentoId && (
+      {pagamentoParaRegistrar && (
         <AdicionarPagamentoModal
-          pagamento={pagamentoSelecionado}
+          pagamento={pagamentoParaRegistrar}
           onClose={() => setRegistrandoPagamentoId(null)}
-          onConfirmar={(dados) => handleConfirmarPagamento(pagamentoSelecionado.atendimentoId, dados)}
+          onConfirmar={(dados) => handleConfirmarPagamento(pagamentoParaRegistrar.atendimentoId, dados)}
           erroSalvar={erroRegistrarPagamento}
         />
       )}

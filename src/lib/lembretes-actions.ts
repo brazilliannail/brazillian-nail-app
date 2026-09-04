@@ -16,6 +16,31 @@ async function nextMensagemLogId(tx: Tx): Promise<{ id: string; numeroSequencial
   return { id: `MSG-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
+type NovaMensagemLog = Omit<Prisma.MensagemLogUncheckedCreateInput, "id" | "numeroSequencial">;
+
+function isUniqueConstraintError(error: unknown): error is { code: "P2002" } {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
+/**
+ * `mensagens_log` mantém o padrão legado MAX+1. Duas abas podem calcular o mesmo próximo número;
+ * nesse caso a restrição UNIQUE protege o banco e repetimos a transação com o novo máximo.
+ */
+async function criarMensagemLogComRetry(data: NovaMensagemLog): Promise<void> {
+  const maxTentativas = 3;
+  for (let tentativa = 1; tentativa <= maxTentativas; tentativa += 1) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const { id, numeroSequencial } = await nextMensagemLogId(tx);
+        await tx.mensagemLog.create({ data: { ...data, id, numeroSequencial } });
+      });
+      return;
+    } catch (error) {
+      if (!isUniqueConstraintError(error) || tentativa === maxTentativas) throw error;
+    }
+  }
+}
+
 /** Altera o status de um lembrete (preparado/enviado/tratado pessoalmente/ignorado/reativado).
  * Ao marcar como "enviado", registra `enviadoEm` e confirma qualquer mensagem ainda "preparada"
  * ligada a este lembrete em `mensagens_log` (ver DATABASE_DESIGN.md §4.10). */
@@ -85,22 +110,71 @@ export async function registrarMensagemPreparadaAction(dados: {
   });
   if (!contato) return;
 
-  await prisma.$transaction(async (tx) => {
-    const { id, numeroSequencial } = await nextMensagemLogId(tx);
-    await tx.mensagemLog.create({
-      data: {
-        id,
-        numeroSequencial,
-        clienteId: lembrete.agendamento.clienteId,
-        contatoId: contato.id,
-        lembreteId: lembrete.id,
-        canal: dados.canal,
-        idioma: dados.idioma,
-        textoPreparado: dados.texto,
-        statusMensagem: "preparada",
-      },
-    });
+  await criarMensagemLogComRetry({
+    clienteId: lembrete.agendamento.clienteId,
+    contatoId: contato.id,
+    lembreteId: lembrete.id,
+    canal: dados.canal,
+    idioma: dados.idioma,
+    textoPreparado: dados.texto,
+    statusMensagem: "preparada",
   });
 
   revalidatePath("/lembretes");
+}
+
+type MensagemAvulsaPreparada = {
+  clienteId: string;
+  papel: "principal" | "secundario";
+  canal: "whatsapp" | "sms";
+  idioma: IdiomaContato;
+  texto: string;
+};
+
+/**
+ * Núcleo compartilhado do registro de mensagem AVULSA (fora do fluxo de Lembretes): grava UMA
+ * linha `preparada` em `mensagens_log` — mesma tabela, mesmo `statusMensagem`, nunca "enviada",
+ * `confirmadoEm` sempre null — resolvendo o `contato_id` real a partir de `(clienteId, papel)`.
+ * `lembreteId` nasce `null` (a coluna é opcional no schema exatamente para isto). Não cria nem
+ * exige Lembrete. Cliente/contato inexistente → nenhum registro é gravado (mesmo comportamento
+ * silencioso já usado no fluxo da Agenda; a UI só chama isto com contato carregado).
+ * Usado pelo botão "Abrir WhatsApp" da Agenda e pelos botões de WhatsApp/SMS da ficha da cliente
+ * — uma lógica só, sem duplicar canal/idioma/telefone/formatação.
+ */
+async function gravarMensagemAvulsaPreparada(dados: MensagemAvulsaPreparada): Promise<void> {
+  const contato = await prisma.contato.findFirst({
+    where: { clienteId: dados.clienteId, papel: dados.papel },
+  });
+  if (!contato) return;
+
+  await criarMensagemLogComRetry({
+    clienteId: dados.clienteId,
+    contatoId: contato.id,
+    lembreteId: null,
+    canal: dados.canal,
+    idioma: dados.idioma,
+    textoPreparado: dados.texto,
+    statusMensagem: "preparada",
+  });
+}
+
+/**
+ * Registro de auditoria para o botão "Abrir WhatsApp" da Agenda (mensagem de um agendamento
+ * qualquer, não necessariamente um lembrete de amanhã). Ver `gravarMensagemAvulsaPreparada`.
+ */
+export async function registrarMensagemAgendamentoPreparadaAction(dados: MensagemAvulsaPreparada): Promise<void> {
+  await requireRosangela();
+  await gravarMensagemAvulsaPreparada(dados);
+  revalidatePath("/agenda");
+}
+
+/**
+ * Igual à da Agenda, para os botões de WhatsApp/SMS da FICHA da cliente (mensagem avulsa aberta
+ * pela tela de Clientes, sem nenhum agendamento envolvido). Mesma tabela, mesmo status
+ * `preparada`, `lembreteId` null, nunca "enviada" — não cria Lembrete nem exige `lembreteId`.
+ */
+export async function registrarMensagemClientePreparadaAction(dados: MensagemAvulsaPreparada): Promise<void> {
+  await requireRosangela();
+  await gravarMensagemAvulsaPreparada(dados);
+  revalidatePath("/clientes");
 }

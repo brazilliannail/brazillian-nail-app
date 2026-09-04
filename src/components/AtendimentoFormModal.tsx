@@ -15,6 +15,9 @@ import { expedienteDeConfiguracoes } from "@/lib/configuracoes-mock";
 type AtendimentoFormModalProps = {
   modo: "criar" | "editar";
   atendimento: Atendimento | null;
+  /** Cliente pré-selecionada ao abrir em modo "criar" (ex.: "Iniciar atendimento" na ficha da
+   * cliente). A profissional ainda revisa e salva o formulário. Ignorada em modo "editar". */
+  clienteIdPadrao?: string;
   onClose: () => void;
   onSave: (atendimento: Atendimento) => void;
   erroSalvar?: string | null;
@@ -49,7 +52,7 @@ function linhasIniciais(servicos: ServicoRealizado[]): ServicoLinha[] {
   );
 }
 
-export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroSalvar }: AtendimentoFormModalProps) {
+export function AtendimentoFormModal({ modo, atendimento, clienteIdPadrao, onClose, onSave, erroSalvar }: AtendimentoFormModalProps) {
   const { t } = useLanguage();
   const { clientes } = useClientes();
   const { servicos } = useServicos();
@@ -63,7 +66,7 @@ export function AtendimentoFormModal({ modo, atendimento, onClose, onSave, erroS
     [expediente],
   );
 
-  const [clienteId, setClienteId] = useState(atendimento?.clienteId ?? "");
+  const [clienteId, setClienteId] = useState(atendimento?.clienteId ?? clienteIdPadrao ?? "");
   const [agendamentoId, setAgendamentoId] = useState(atendimento?.agendamentoId ?? "");
   const [profissional, setProfissional] = useState(atendimento?.profissional ?? "Rosângela");
   const [dataIso, setDataIso] = useState(() =>

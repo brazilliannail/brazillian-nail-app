@@ -10,6 +10,7 @@ import { AtendimentoCard } from "@/components/AtendimentoCard";
 import { AtendimentoDetailsPanel } from "@/components/AtendimentoDetailsPanel";
 import { AtendimentoFormModal } from "@/components/AtendimentoFormModal";
 import { ConcluirAtendimentoModal } from "@/components/ConcluirAtendimentoModal";
+import { ProximosRetornosPreview } from "@/components/ProximosRetornosPreview";
 import { AdicionarPagamentoModal } from "@/components/AdicionarPagamentoModal";
 import { PlusIcon } from "@/components/icons";
 import { saldoPendente, type Atendimento } from "@/lib/atendimentos-mock";
@@ -39,8 +40,17 @@ export default function AtendimentosPage() {
   // pré-seleciona o atendimento na primeira renderização, sem alterar o fluxo de seleção normal.
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("id"));
   const [formState, setFormState] = useState<FormState>(null);
-  const [concluindo, setConcluindo] = useState(false);
+  // Deep-link vindo da Agenda ("Concluir atendimento" → /atendimentos?id=ATD-000001&concluir=1):
+  // abre o MESMO ConcluirAtendimentoModal já usado por esta tela (nenhum fluxo paralelo), só se o
+  // atendimento apontado ainda estiver "emAndamento" — um link obsoleto (já concluído/cancelado)
+  // não abre o modal à toa; o botão "Concluir" normal do painel continua disponível de qualquer forma.
+  const [concluindo, setConcluindo] = useState(() => {
+    if (searchParams.get("concluir") !== "1") return false;
+    const id = searchParams.get("id");
+    return atendimentos.some((item) => item.id === id && item.status === "emAndamento");
+  });
   const [registrandoPagamento, setRegistrandoPagamento] = useState(false);
+  const [verRetornos, setVerRetornos] = useState(false);
   const [erroFormulario, setErroFormulario] = useState<string | null>(null);
   const [erroConcluir, setErroConcluir] = useState<string | null>(null);
   const [erroOperacao, setErroOperacao] = useState<string | null>(null);
@@ -209,6 +219,7 @@ export default function AtendimentosPage() {
               setErroRegistrarPagamento(null);
               setRegistrandoPagamento(true);
             }}
+            onVerRetornos={() => setVerRetornos(true)}
           />
         </div>
       )}
@@ -233,9 +244,18 @@ export default function AtendimentosPage() {
                 setErroRegistrarPagamento(null);
                 setRegistrandoPagamento(true);
               }}
+              onVerRetornos={() => setVerRetornos(true)}
             />
           </div>
         </div>
+      )}
+
+      {verRetornos && atendimentoSelecionado && (
+        <ProximosRetornosPreview
+          key={atendimentoSelecionado.id}
+          atendimentoId={atendimentoSelecionado.id}
+          onClose={() => setVerRetornos(false)}
+        />
       )}
 
       {formState && (

@@ -17,7 +17,7 @@ import type { StatusKey } from "@/lib/mock-data";
 import { formatMinutesAsTime, mmddyyyyToISO } from "@/lib/date";
 import { formatPagamentoId } from "@/lib/pagamentos-mock";
 import { calcularValorRecebidoServico } from "@/lib/pagamentos-repo";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { requireRosangela } from "@/lib/auth/authorization";
 
 type Tx = Prisma.TransactionClient;
@@ -119,6 +119,19 @@ async function buscarAtendimentoCompleto(tx: Tx, id: string): Promise<Atendiment
   return mapAtendimentoRow(row);
 }
 
+/** Um novo atendimento torna qualquer decisão anterior de reengajamento obsoleta. */
+async function resetarReengajamentoCliente(tx: Tx, clienteId: string) {
+  await tx.cliente.update({
+    where: { id: clienteId },
+    data: {
+      reengajamentoStatus: "nenhum",
+      reengajamentoAtualizadoEm: null,
+      reengajamentoAdiadoAte: null,
+      reengajamentoObservacao: null,
+    },
+  });
+}
+
 /** Cria um novo atendimento (sempre com status "emAndamento"), com seus serviços em snapshot. */
 export async function createAtendimentoAction(dados: Omit<Atendimento, "id">): Promise<Atendimento> {
   await requireRosangela();
@@ -148,6 +161,7 @@ export async function createAtendimentoAction(dados: Omit<Atendimento, "id">): P
     });
 
     await sincronizarServicos(tx, id, dados.servicos);
+    await resetarReengajamentoCliente(tx, dados.clienteId);
 
     return buscarAtendimentoCompleto(tx, id);
   });
@@ -172,14 +186,41 @@ export type IniciarAtendimentoResultado = {
   criado: boolean;
 };
 
+/** Busca o atendimento ativo (não cancelado) de um agendamento, já concluído/em andamento. Usada
+ * tanto no caminho normal (checagem dentro da transação) quanto na recuperação de colisão abaixo. */
+async function buscarAtendimentoAtivoDoAgendamento(
+  db: Tx | typeof prisma,
+  agendamentoId: string,
+): Promise<IniciarAtendimentoResultado | null> {
+  const existente = await db.atendimento.findFirst({
+    where: { agendamentoId, status: { not: "cancelado" } },
+    include: { servicos: true, pagamentos: true },
+    orderBy: { id: "asc" },
+  });
+  if (!existente) return null;
+
+  const agendamento = await db.agendamento.findUnique({ where: { id: agendamentoId } });
+  if (!agendamento) return null;
+
+  return { atendimento: mapAtendimentoRow(existente), agendamento: mapAgendamentoRow(agendamento), criado: false };
+}
+
 /**
  * Abre o atendimento de um agendamento da Agenda, reaproveitando os dados já persistidos
  * (cliente, data, horário, serviço, observações) — a profissional não redigita nada.
  *
- * Proteção contra duplicidade: dentro da mesma transação, procura um atendimento já vinculado a
- * este `agendamentoId`; se existir, devolve-o com `criado: false` em vez de criar outro.
- * Atendimentos `cancelado` são ignorados nessa busca de propósito — um atendimento aberto por
- * engano e cancelado não pode bloquear para sempre o agendamento, que precisa poder ser reaberto.
+ * Proteção contra duplicidade em duas camadas:
+ * 1. Dentro da transação, procura um atendimento já vinculado a este `agendamentoId`; se existir,
+ *    devolve-o com `criado: false` em vez de criar outro (cobre o caso comum: mesma sessão,
+ *    clique repetido). Atendimentos `cancelado` são ignorados nessa busca de propósito — um
+ *    atendimento aberto por engano e cancelado não pode bloquear para sempre o agendamento, que
+ *    precisa poder ser reaberto.
+ * 2. Um índice único parcial no banco (`atendimentos_agendamento_id_ativo_key`, ver migration
+ *    20260901120000) só permite um atendimento não cancelado por agendamento — fecha a corrida
+ *    real entre duas conexões diferentes que passam pela checagem (1) quase ao mesmo tempo. Se a
+ *    criação desta transação perder essa corrida, o catch abaixo recupera o atendimento que a
+ *    vencedora acabou de criar e devolve-o do mesmo jeito (`criado: false`), sem propagar erro e
+ *    sem deixar duplicidade.
  *
  * Sincronização de status: o agendamento passa a "emAtendimento" na mesma transação.
  * Nenhuma regra financeira é envolvida aqui — nasce sem pagamento, como todo atendimento novo.
@@ -188,79 +229,81 @@ export async function iniciarAtendimentoDoAgendamentoAction(
   agendamentoId: string,
 ): Promise<IniciarAtendimentoResultado> {
   await requireRosangela();
-  const resultado = await prisma.$transaction(async (tx) => {
-    const agendamento = await tx.agendamento.findUnique({ where: { id: agendamentoId } });
-    if (!agendamento) {
-      throw new Error("Agendamento não encontrado.");
-    }
-    if (agendamento.status === "cancelado" || agendamento.status === "naoCompareceu") {
-      throw new Error("Não é possível iniciar o atendimento de um agendamento cancelado ou sem comparecimento.");
-    }
+  try {
+    const resultado = await prisma.$transaction(async (tx) => {
+      const agendamento = await tx.agendamento.findUnique({ where: { id: agendamentoId } });
+      if (!agendamento) {
+        throw new Error("Agendamento não encontrado.");
+      }
+      if (agendamento.status === "cancelado" || agendamento.status === "naoCompareceu") {
+        throw new Error("Não é possível iniciar o atendimento de um agendamento cancelado ou sem comparecimento.");
+      }
 
-    const existente = await tx.atendimento.findFirst({
-      where: { agendamentoId, status: { not: "cancelado" } },
-      include: { servicos: true, pagamentos: true },
-      orderBy: { id: "asc" },
-    });
-    if (existente) {
-      return {
-        atendimento: mapAtendimentoRow(existente),
-        agendamento: mapAgendamentoRow(agendamento),
-        criado: false,
+      const existente = await buscarAtendimentoAtivoDoAgendamento(tx, agendamentoId);
+      if (existente) return existente;
+
+      const servicoCatalogo = agendamento.servicoId
+        ? await tx.servico.findUnique({ where: { id: agendamento.servicoId } })
+        : null;
+
+      // Um atendimento exige ao menos um serviço; sem serviço no catálogo grava-se uma linha avulsa
+      // (`servicoId: null`), que a profissional ajusta depois ao concluir.
+      const servicoSnapshot = {
+        servicoId: servicoCatalogo?.id ?? null,
+        nomePt: servicoCatalogo?.nomePt ?? SERVICO_A_DEFINIR.pt,
+        nomeEn: servicoCatalogo?.nomeEn ?? (servicoCatalogo ? "" : SERVICO_A_DEFINIR.en),
+        valor: agendamento.valorEstimado ?? servicoCatalogo?.precoPadrao ?? 0,
       };
-    }
 
-    const servicoCatalogo = agendamento.servicoId
-      ? await tx.servico.findUnique({ where: { id: agendamento.servicoId } })
-      : null;
+      const { id, numeroSequencial } = await nextAtendimentoId(tx);
 
-    // Um atendimento exige ao menos um serviço; sem serviço no catálogo grava-se uma linha avulsa
-    // (`servicoId: null`), que a profissional ajusta depois ao concluir.
-    const servicoSnapshot = {
-      servicoId: servicoCatalogo?.id ?? null,
-      nomePt: servicoCatalogo?.nomePt ?? SERVICO_A_DEFINIR.pt,
-      nomeEn: servicoCatalogo?.nomeEn ?? (servicoCatalogo ? "" : SERVICO_A_DEFINIR.en),
-      valor: agendamento.valorEstimado ?? servicoCatalogo?.precoPadrao ?? 0,
-    };
+      await tx.atendimento.create({
+        data: {
+          id,
+          numeroSequencial,
+          clienteId: agendamento.clienteId,
+          agendamentoId: agendamento.id,
+          profissional: PROFISSIONAL_PADRAO,
+          // `agendamento.data` já está em ISO no banco — não passa por `mmddyyyyToISO`.
+          data: agendamento.data,
+          horarioInicio: formatMinutesAsTime(agendamento.inicioMin),
+          horarioFim: null,
+          duracaoMin: null,
+          desconto: 0,
+          status: "emAndamento",
+          observacoesPt: agendamento.observacoesPt,
+          observacoesEn: agendamento.observacoesEn,
+          retornoSugeridoDias: servicoCatalogo?.retornoSugeridoDias ?? null,
+        },
+      });
 
-    const { id, numeroSequencial } = await nextAtendimentoId(tx);
+      await sincronizarServicos(tx, id, [servicoSnapshot]);
+      await resetarReengajamentoCliente(tx, agendamento.clienteId);
 
-    await tx.atendimento.create({
-      data: {
-        id,
-        numeroSequencial,
-        clienteId: agendamento.clienteId,
-        agendamentoId: agendamento.id,
-        profissional: PROFISSIONAL_PADRAO,
-        // `agendamento.data` já está em ISO no banco — não passa por `mmddyyyyToISO`.
-        data: agendamento.data,
-        horarioInicio: formatMinutesAsTime(agendamento.inicioMin),
-        horarioFim: null,
-        duracaoMin: null,
-        desconto: 0,
-        status: "emAndamento",
-        observacoesPt: agendamento.observacoesPt,
-        observacoesEn: agendamento.observacoesEn,
-        retornoSugeridoDias: servicoCatalogo?.retornoSugeridoDias ?? null,
-      },
+      const agendamentoAtualizado =
+        agendamento.status === "emAtendimento"
+          ? agendamento
+          : await tx.agendamento.update({ where: { id: agendamento.id }, data: { status: "emAtendimento" } });
+
+      return {
+        atendimento: await buscarAtendimentoCompleto(tx, id),
+        agendamento: mapAgendamentoRow(agendamentoAtualizado),
+        criado: true,
+      };
     });
 
-    await sincronizarServicos(tx, id, [servicoSnapshot]);
-
-    const agendamentoAtualizado =
-      agendamento.status === "emAtendimento"
-        ? agendamento
-        : await tx.agendamento.update({ where: { id: agendamento.id }, data: { status: "emAtendimento" } });
-
-    return {
-      atendimento: await buscarAtendimentoCompleto(tx, id),
-      agendamento: mapAgendamentoRow(agendamentoAtualizado),
-      criado: true,
-    };
-  });
-
-  revalidatePath("/", "layout");
-  return resultado;
+    revalidatePath("/", "layout");
+    return resultado;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const recuperado = await buscarAtendimentoAtivoDoAgendamento(prisma, agendamentoId);
+      if (recuperado) {
+        revalidatePath("/", "layout");
+        return recuperado;
+      }
+    }
+    throw error;
+  }
 }
 
 /**

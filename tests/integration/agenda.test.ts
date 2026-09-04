@@ -278,6 +278,72 @@ describe("agenda (agenda-actions + agenda-repo)", () => {
     expect(atualizado.observacoesPt).toBe("Cliente pediu para trocar a cor.");
   });
 
+  it("exige reconfirmação ao alterar data, horário ou serviço de um agendamento confirmado", async () => {
+    const cliente = await criarClienteTeste();
+    const dataOriginal = proximaDataAgendaTeste();
+    const novaData = proximaDataAgendaTeste();
+    const agregadoServico = await prisma.servico.aggregate({ _max: { numeroSequencial: true } });
+    const numeroServico = (agregadoServico._max.numeroSequencial ?? 0) + 1;
+    const servico = await prisma.servico.create({
+      data: {
+        id: `SRV-${String(numeroServico).padStart(6, "0")}`,
+        numeroSequencial: numeroServico,
+        nomePt: "Serviço para reconfirmação",
+        categoria: "Teste",
+        precoPadrao: 50,
+        duracaoPadraoMin: 60,
+      },
+    });
+
+    const criado = await createAgendamentoAction({
+      clienteId: cliente.id,
+      servicoId: null,
+      status: "aguardando",
+      data: dataOriginal,
+      inicioMin: 9 * 60,
+      fimMin: 10 * 60,
+      valorEstimado: 50,
+      observacoesPt: "",
+      observacoesEn: "",
+    });
+    let confirmado = await updateStatusAgendamentoAction(criado.id, "confirmado");
+
+    const comNovaData = await updateAgendamentoAction({ ...confirmado, data: novaData });
+    expect(comNovaData.status).toBe("aguardando");
+
+    confirmado = await updateStatusAgendamentoAction(criado.id, "confirmado");
+    const comNovoHorario = await updateAgendamentoAction({ ...confirmado, inicioMin: 10 * 60, fimMin: 11 * 60 });
+    expect(comNovoHorario.status).toBe("aguardando");
+
+    confirmado = await updateStatusAgendamentoAction(criado.id, "confirmado");
+    const comNovoServico = await updateAgendamentoAction({ ...confirmado, servicoId: servico.id });
+    expect(comNovoServico.status).toBe("aguardando");
+  });
+
+  it("preserva confirmado quando a edição muda somente valor ou observações", async () => {
+    const cliente = await criarClienteTeste();
+    const criado = await createAgendamentoAction({
+      clienteId: cliente.id,
+      servicoId: null,
+      status: "aguardando",
+      data: proximaDataAgendaTeste(),
+      inicioMin: 9 * 60,
+      fimMin: 10 * 60,
+      valorEstimado: 50,
+      observacoesPt: "",
+      observacoesEn: "",
+    });
+    const confirmado = await updateStatusAgendamentoAction(criado.id, "confirmado");
+
+    const atualizado = await updateAgendamentoAction({
+      ...confirmado,
+      valorEstimado: 75,
+      observacoesPt: "Somente uma nota administrativa.",
+    });
+
+    expect(atualizado.status).toBe("confirmado");
+  });
+
   it("updateAgendamentoAction rejeita agendamento inexistente", async () => {
     const cliente = await criarClienteTeste();
     const data = proximaDataAgendaTeste();
@@ -340,6 +406,31 @@ describe("agenda (agenda-actions + agenda-repo)", () => {
     expect(reagendado.data).toBe(novaData);
     expect(reagendado.inicioMin).toBe(14 * 60);
     expect(reagendado.fimMin).toBe(15 * 60);
+  });
+
+  it("reagendar um agendamento confirmado exige nova confirmação", async () => {
+    const cliente = await criarClienteTeste();
+    const criado = await createAgendamentoAction({
+      clienteId: cliente.id,
+      servicoId: null,
+      status: "aguardando",
+      data: proximaDataAgendaTeste(),
+      inicioMin: 9 * 60,
+      fimMin: 10 * 60,
+      valorEstimado: null,
+      observacoesPt: "",
+      observacoesEn: "",
+    });
+    await updateStatusAgendamentoAction(criado.id, "confirmado");
+
+    const reagendado = await reagendarAgendamentoAction(
+      criado.id,
+      proximaDataAgendaTeste(),
+      14 * 60,
+      15 * 60,
+    );
+
+    expect(reagendado.status).toBe("aguardando");
   });
 
   it("reagendarAgendamentoAction rejeita conflito na nova data", async () => {

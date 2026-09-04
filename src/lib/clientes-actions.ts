@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { mapClienteRow, includeRelacionamentosCliente } from "@/lib/clientes-repo";
-import { formatClienteId, type Cliente, type Contato } from "@/lib/clientes-mock";
+import {
+  aniversarioDiaMesValido,
+  formatClienteId,
+  telefoneValido,
+  type Cliente,
+  type Contato,
+  type ReengajamentoStatus,
+} from "@/lib/clientes-mock";
+import { formatDateISO, parseDateISO } from "@/lib/date";
 import type { Prisma } from "@/generated/prisma/client";
 import { requireRosangela } from "@/lib/auth/authorization";
 
@@ -17,12 +25,6 @@ async function nextContatoId(tx: Tx): Promise<{ id: string; numeroSequencial: nu
   return { id: `CTT-${String(numeroSequencial).padStart(6, "0")}`, numeroSequencial };
 }
 
-/** Mesma regra usada em `ClienteFormModal.tsx` (`telefoneValido`): aceita qualquer formatação
- * (parênteses, espaços, traços, "+"), desde que reste ao menos 7 dígitos. */
-function telefoneValido(telefone: string) {
-  return telefone.replace(/\D/g, "").length >= 7;
-}
-
 function validarContato(contato: Contato | null) {
   if (!contato) return;
   if (contato.telefone.trim() === "") {
@@ -30,6 +32,16 @@ function validarContato(contato: Contato | null) {
   }
   if (!telefoneValido(contato.telefone)) {
     throw new Error("Telefone do contato é inválido.");
+  }
+}
+
+/** Mesma regra usada em `ClienteFormModal.tsx`: dia e mês são sempre exigidos juntos; ano é
+ * independente e opcional. Lança se a combinação for inválida (dia sem mês, mês fora de 1-12 etc). */
+function validarAniversario(dados: Pick<Cliente, "aniversarioDia" | "aniversarioMes">) {
+  const dia = dados.aniversarioDia ?? null;
+  const mes = dados.aniversarioMes ?? null;
+  if (!aniversarioDiaMesValido(dia, mes)) {
+    throw new Error("Dia e mês do aniversário devem ser informados juntos e ser uma data válida.");
   }
 }
 
@@ -89,6 +101,7 @@ export async function createClienteAction(dados: Omit<Cliente, "id">): Promise<C
   }
   validarContato(dados.contatoPrincipal);
   validarContato(dados.contatoSecundario);
+  validarAniversario(dados);
 
   const resultado = await prisma.$transaction(async (tx) => {
     const agregado = await tx.cliente.aggregate({ _max: { numeroSequencial: true } });
@@ -106,6 +119,9 @@ export async function createClienteAction(dados: Omit<Cliente, "id">): Promise<C
         observacoesEn: dados.observacoesEn,
         avisosImportantesPt: JSON.stringify(dados.avisosImportantesPt),
         avisosImportantesEn: JSON.stringify(dados.avisosImportantesEn),
+        aniversarioDia: dados.aniversarioDia ?? null,
+        aniversarioMes: dados.aniversarioMes ?? null,
+        aniversarioAno: dados.aniversarioAno ?? null,
       },
     });
 
@@ -132,6 +148,7 @@ export async function updateClienteAction(cliente: Cliente): Promise<Cliente> {
   }
   validarContato(cliente.contatoPrincipal);
   validarContato(cliente.contatoSecundario);
+  validarAniversario(cliente);
 
   const resultado = await prisma.$transaction(async (tx) => {
     const existente = await tx.cliente.findUnique({ where: { id: cliente.id } });
@@ -148,6 +165,9 @@ export async function updateClienteAction(cliente: Cliente): Promise<Cliente> {
         observacoesEn: cliente.observacoesEn,
         avisosImportantesPt: JSON.stringify(cliente.avisosImportantesPt),
         avisosImportantesEn: JSON.stringify(cliente.avisosImportantesEn),
+        aniversarioDia: cliente.aniversarioDia ?? null,
+        aniversarioMes: cliente.aniversarioMes ?? null,
+        aniversarioAno: cliente.aniversarioAno ?? null,
       },
     });
 
@@ -173,6 +193,49 @@ export async function toggleStatusClienteAction(id: string): Promise<Cliente> {
     const novoStatus = existente.status === "ativa" ? "inativa" : "ativa";
     await tx.cliente.update({ where: { id }, data: { status: novoStatus } });
 
+    return buscarClienteCompleto(tx, id);
+  });
+
+  revalidatePath("/", "layout");
+  return resultado;
+}
+
+/** Persiste a decisão humana sobre um alerta de reengajamento. */
+export async function updateReengajamentoClienteAction(
+  id: string,
+  dados: { status: Exclude<ReengajamentoStatus, "nenhum">; adiadoAte?: string | null; observacao?: string | null },
+): Promise<Cliente> {
+  await requireRosangela();
+  const hojeIso = formatDateISO(new Date());
+  const adiadoAte = dados.adiadoAte?.trim() || null;
+
+  if (dados.status === "adiado") {
+    if (!adiadoAte || !/^\d{4}-\d{2}-\d{2}$/.test(adiadoAte) || formatDateISO(parseDateISO(adiadoAte)) !== adiadoAte) {
+      throw new Error("Informe uma data válida para adiar o contato.");
+    }
+    if (adiadoAte <= hojeIso) {
+      throw new Error("A nova data de contato deve ser posterior a hoje.");
+    }
+  }
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    const existente = await tx.cliente.findUnique({ where: { id } });
+    if (!existente) throw new Error("Cliente não encontrada.");
+    if (existente.status !== "ativa") throw new Error("Apenas clientes ativas podem receber ações de reengajamento.");
+    const clienteCompleto = await buscarClienteCompleto(tx, id);
+    if (!clienteCompleto.elegivelReengajamento) {
+      throw new Error("Esta cliente não está mais elegível para reengajamento.");
+    }
+
+    await tx.cliente.update({
+      where: { id },
+      data: {
+        reengajamentoStatus: dados.status,
+        reengajamentoAtualizadoEm: new Date(),
+        reengajamentoAdiadoAte: dados.status === "adiado" ? adiadoAte : null,
+        reengajamentoObservacao: dados.observacao?.trim() || null,
+      },
+    });
     return buscarClienteCompleto(tx, id);
   });
 

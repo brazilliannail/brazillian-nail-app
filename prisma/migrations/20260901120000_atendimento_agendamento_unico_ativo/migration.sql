@@ -1,0 +1,18 @@
+-- Garante em nível de banco (não só na checagem dentro da transação de
+-- `iniciarAtendimentoDoAgendamentoAction`) que um agendamento nunca tenha mais de um atendimento
+-- ATIVO (status <> 'cancelado') ao mesmo tempo. Isso fecha a corrida real entre duas requisições
+-- concorrentes (duas conexões diferentes) que passam pela checagem "não existe atendimento ativo"
+-- praticamente ao mesmo tempo — a checagem dentro da transação, sozinha, não impede isso sob
+-- concorrência de verdade; só uma constraint no próprio Postgres impede.
+--
+-- Deliberadamente NÃO é um UNIQUE simples em "agendamento_id": o histórico legitimamente permite
+-- mais de um atendimento apontando para o mesmo agendamento ao longo do tempo — por exemplo, um
+-- atendimento cancelado (`cancelarAtendimentoAction`, que devolve o agendamento para "confirmado")
+-- e depois reiniciado, criando uma segunda linha de atendimento para o mesmo agendamento. Um
+-- UNIQUE simples quebraria esse fluxo já existente e testado.
+--
+-- Um índice único PARCIAL — que só enxerga linhas com status <> 'cancelado' — permite esse
+-- histórico (múltiplos atendimentos cancelados, ou um cancelado + um novo ativo) e ainda assim
+-- proíbe dois atendimentos ativos simultâneos para o mesmo agendamento. Aditiva: não altera
+-- nenhuma linha existente, só adiciona um índice/constraint.
+CREATE UNIQUE INDEX "atendimentos_agendamento_id_ativo_key" ON "atendimentos"("agendamento_id") WHERE "agendamento_id" IS NOT NULL AND "status" <> 'cancelado';

@@ -17,8 +17,10 @@ import {
 } from "@/components/icons";
 import { ClienteHistoricoModal } from "@/components/ClienteHistoricoModal";
 import { ContatoAcoesMensagem } from "@/components/ContatoAcoesMensagem";
+import { useClientes } from "@/components/ClientesProvider";
 import { buildMensagemContato } from "@/lib/mensagens";
-import type { Cliente, Contato } from "@/lib/clientes-mock";
+import type { Cliente, Contato, ReengajamentoStatus } from "@/lib/clientes-mock";
+import { addDays, formatDateISO } from "@/lib/date";
 import type { Dictionary } from "@/lib/i18n";
 
 /** Extrai "MM/DD/YYYY" e "h:mm AM/PM" de "MM/DD/YYYY · h:mm AM". */
@@ -32,7 +34,18 @@ type ClienteDetailsPanelProps = {
   cliente: Cliente;
   onClose: () => void;
   onEdit: () => void;
+  /** Abre o formulário REAL de novo agendamento (`AgendaFormModal`) com esta cliente já
+   * selecionada — a profissional revisa e salva. */
+  onAgendar: () => void;
+  /** Abre o formulário REAL de atendimento de encaixe/avulso (`AtendimentoFormModal`) com esta
+   * cliente já selecionada — nada é iniciado só pelo clique; a profissional revisa e salva. */
+  onIniciarAtendimento: () => void;
   onToggleStatus: () => void;
+  onReengajamento: (dados: {
+    status: Exclude<ReengajamentoStatus, "nenhum">;
+    adiadoAte?: string | null;
+    observacao?: string | null;
+  }) => void;
 };
 
 const CANAL_ICON: Record<Contato["canalPreferido"], React.ComponentType<{ className?: string }>> = {
@@ -106,8 +119,17 @@ function ContatoDetalhe({ titulo, contato, semContatoTexto, t }: ContatoDetalheP
   );
 }
 
-export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }: ClienteDetailsPanelProps) {
+export function ClienteDetailsPanel({
+  cliente,
+  onClose,
+  onEdit,
+  onAgendar,
+  onIniciarAtendimento,
+  onToggleStatus,
+  onReengajamento,
+}: ClienteDetailsPanelProps) {
   const { locale, t } = useLanguage();
+  const { registrarMensagemPreparada } = useClientes();
   const c = t.clientes;
   const d = c.detalhes;
   const inicial = cliente.nome.trim().charAt(0).toUpperCase();
@@ -117,6 +139,8 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
   const temPendencia = cliente.valorPendente > 0;
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const [confirmandoInativar, setConfirmandoInativar] = useState(false);
+  const [reengajamentoObservacao, setReengajamentoObservacao] = useState("");
+  const [reengajamentoAdiadoAte, setReengajamentoAdiadoAte] = useState(() => formatDateISO(addDays(new Date(), 7)));
 
   const { data: dataProximoAgendamento, horario: horarioProximoAgendamento } = separarDataHorario(
     cliente.proximoAgendamento,
@@ -131,6 +155,19 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
       servicoPt: null,
       servicoEn: null,
     });
+  }
+
+  /** Auditoria da mensagem avulsa aberta pela ficha — registra `preparada` em `mensagens_log`
+   * (nunca "enviada"). Fire-and-forget dentro do provider: não atrasa a abertura do WhatsApp/SMS. */
+  function abrirCanalDe(contato: Contato, papel: "principal" | "secundario") {
+    return (canal: "whatsapp" | "sms") =>
+      registrarMensagemPreparada({
+        clienteId: cliente.id,
+        papel,
+        canal,
+        idioma: contato.idioma,
+        texto: mensagemPara(contato),
+      });
   }
 
   function handleToggleStatus() {
@@ -181,6 +218,46 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
         >
           {c.statusLabel[cliente.status]}
         </span>
+
+        {cliente.elegivelReengajamento && (
+          <section className="flex flex-col gap-3 rounded-xl border border-status-aguardando/30 bg-status-aguardando/5 p-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-status-aguardando">
+                <AlertIcon className="h-4 w-4" />
+                {d.reengajamento.titulo}
+              </p>
+              <p className="mt-1 text-xs text-foreground/60">{d.reengajamento.descricao}</p>
+            </div>
+            <textarea
+              value={reengajamentoObservacao}
+              onChange={(event) => setReengajamentoObservacao(event.target.value)}
+              placeholder={d.reengajamento.observacao}
+              rows={2}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40"
+            />
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={reengajamentoAdiadoAte}
+                min={formatDateISO(addDays(new Date(), 1))}
+                onChange={(event) => setReengajamentoAdiadoAte(event.target.value)}
+                aria-label={d.reengajamento.dataRetorno}
+                className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              />
+              <button type="button" onClick={() => onReengajamento({ status: "adiado", adiadoAte: reengajamentoAdiadoAte, observacao: reengajamentoObservacao })} className="rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
+                {d.reengajamento.adiar}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => onReengajamento({ status: "contatado", observacao: reengajamentoObservacao })} className="rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white">
+                {d.reengajamento.contatada}
+              </button>
+              <button type="button" onClick={() => onReengajamento({ status: "ignorado", observacao: reengajamentoObservacao })} className="rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
+                {d.reengajamento.ignorar}
+              </button>
+            </div>
+          </section>
+        )}
 
         {avisos.length > 0 && (
           <div className="flex flex-col gap-2 rounded-xl border border-status-aguardando/30 bg-status-aguardando/10 p-3">
@@ -250,6 +327,7 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
                   labelWhatsapp={d.acoes.whatsapp}
                   labelSms={d.acoes.sms}
                   avisoLembretesDesativados={d.lembretesDesativadosParaContato}
+                  onAbrirCanal={abrirCanalDe(cliente.contatoPrincipal, "principal")}
                 />
               </div>
             )}
@@ -262,6 +340,7 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
                   labelWhatsapp={d.acoes.whatsapp}
                   labelSms={d.acoes.sms}
                   avisoLembretesDesativados={d.lembretesDesativadosParaContato}
+                  onAbrirCanal={abrirCanalDe(cliente.contatoSecundario, "secundario")}
                 />
               </div>
             )}
@@ -321,6 +400,7 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
+            onClick={onAgendar}
             className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
           >
             <CalendarIcon className="h-4 w-4" />
@@ -328,6 +408,7 @@ export function ClienteDetailsPanel({ cliente, onClose, onEdit, onToggleStatus }
           </button>
           <button
             type="button"
+            onClick={onIniciarAtendimento}
             className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
           >
             <PlayIcon className="h-4 w-4" />

@@ -257,4 +257,142 @@ describe("clientes (clientes-actions + clientes-repo)", () => {
     const buscada = await getClienteById("CLI-999999");
     expect(buscada).toBeNull();
   });
+
+  it("cria cliente com aniversário completo (dia, mês e ano) e persiste os três campos", async () => {
+    const criada = await createClienteAction({
+      nome: `Cliente Teste ${proximoSufixo()}`,
+      nomePreferencia: null,
+      contatoPrincipal: null,
+      contatoSecundario: null,
+      status: "ativa",
+      ultimoAtendimento: "",
+      proximoAgendamento: null,
+      observacoesPt: "",
+      observacoesEn: "",
+      avisosImportantesPt: [],
+      avisosImportantesEn: [],
+      valorPendente: 0,
+      historico: [],
+      aniversarioDia: 15,
+      aniversarioMes: 6,
+      aniversarioAno: 1990,
+    });
+
+    expect(criada.aniversarioDia).toBe(15);
+    expect(criada.aniversarioMes).toBe(6);
+    expect(criada.aniversarioAno).toBe(1990);
+
+    const buscada = await getClienteById(criada.id);
+    expect(buscada?.aniversarioDia).toBe(15);
+    expect(buscada?.aniversarioMes).toBe(6);
+    expect(buscada?.aniversarioAno).toBe(1990);
+  });
+
+  it("cria cliente com aniversário sem ano (dia e mês apenas)", async () => {
+    const criada = await createClienteAction({
+      nome: `Cliente Teste ${proximoSufixo()}`,
+      nomePreferencia: null,
+      contatoPrincipal: null,
+      contatoSecundario: null,
+      status: "ativa",
+      ultimoAtendimento: "",
+      proximoAgendamento: null,
+      observacoesPt: "",
+      observacoesEn: "",
+      avisosImportantesPt: [],
+      avisosImportantesEn: [],
+      valorPendente: 0,
+      historico: [],
+      aniversarioDia: 3,
+      aniversarioMes: 12,
+      aniversarioAno: null,
+    });
+
+    expect(criada.aniversarioDia).toBe(3);
+    expect(criada.aniversarioMes).toBe(12);
+    expect(criada.aniversarioAno).toBeNull();
+  });
+
+  it("rejeita aniversário com dia informado sem mês", async () => {
+    await expect(
+      createClienteAction({
+        nome: `Cliente Teste ${proximoSufixo()}`,
+        nomePreferencia: null,
+        contatoPrincipal: null,
+        contatoSecundario: null,
+        status: "ativa",
+        ultimoAtendimento: "",
+        proximoAgendamento: null,
+        observacoesPt: "",
+        observacoesEn: "",
+        avisosImportantesPt: [],
+        avisosImportantesEn: [],
+        valorPendente: 0,
+        historico: [],
+        aniversarioDia: 15,
+        aniversarioMes: null,
+        aniversarioAno: null,
+      }),
+    ).rejects.toThrow("Dia e mês do aniversário devem ser informados juntos e ser uma data válida.");
+  });
+
+  it("rejeita aniversário com data inválida para o mês", async () => {
+    await expect(
+      createClienteAction({
+        nome: `Cliente Teste ${proximoSufixo()}`,
+        nomePreferencia: null,
+        contatoPrincipal: null,
+        contatoSecundario: null,
+        status: "ativa",
+        ultimoAtendimento: "",
+        proximoAgendamento: null,
+        observacoesPt: "",
+        observacoesEn: "",
+        avisosImportantesPt: [],
+        avisosImportantesEn: [],
+        valorPendente: 0,
+        historico: [],
+        aniversarioDia: 31,
+        aniversarioMes: 4,
+        aniversarioAno: null,
+      }),
+    ).rejects.toThrow("Dia e mês do aniversário devem ser informados juntos e ser uma data válida.");
+  });
+
+  it("updateClienteAction preserva aniversário existente quando não alterado, e permite limpar", async () => {
+    const criada = await createClienteAction({
+      nome: `Cliente Teste ${proximoSufixo()}`,
+      nomePreferencia: null,
+      contatoPrincipal: null,
+      contatoSecundario: null,
+      status: "ativa",
+      ultimoAtendimento: "",
+      proximoAgendamento: null,
+      observacoesPt: "",
+      observacoesEn: "",
+      avisosImportantesPt: [],
+      avisosImportantesEn: [],
+      valorPendente: 0,
+      historico: [],
+      aniversarioDia: 20,
+      aniversarioMes: 9,
+      aniversarioAno: null,
+    });
+
+    const semAlterarAniversario = await updateClienteAction({
+      ...criada,
+      observacoesPt: "Nota qualquer.",
+    });
+    expect(semAlterarAniversario.aniversarioDia).toBe(20);
+    expect(semAlterarAniversario.aniversarioMes).toBe(9);
+
+    const limpo = await updateClienteAction({
+      ...criada,
+      aniversarioDia: null,
+      aniversarioMes: null,
+      aniversarioAno: null,
+    });
+    expect(limpo.aniversarioDia).toBeNull();
+    expect(limpo.aniversarioMes).toBeNull();
+  });
 });

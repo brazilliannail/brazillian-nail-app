@@ -78,7 +78,7 @@ export async function obterBackupCompleto() {
 export async function obterCsv(dataset: ExportDataset) {
   if (dataset === "clientes") {
     const linhas = await prisma.cliente.findMany({ include: { contatos: true }, orderBy: { numeroSequencial: "asc" } });
-    const colunas = ["id", "nome", "nomePreferencia", "status", "telefone", "idioma", "canalPreferido", "receberLembretes", "observacoesPt", "observacoesEn"];
+    const colunas = ["id", "nome", "nomePreferencia", "status", "telefone", "idioma", "canalPreferido", "receberLembretes", "aniversarioDia", "aniversarioMes", "aniversarioAno", "observacoesPt", "observacoesEn"];
     return montarCsv(colunas, linhas.map(({ contatos, ...cliente }) => ({ ...cliente, telefone: contatos[0]?.telefone ?? "", idioma: contatos[0]?.idioma ?? "", canalPreferido: contatos[0]?.canalPreferido ?? "", receberLembretes: contatos[0]?.receberLembretes ?? "" })));
   }
   if (dataset === "servicos") {

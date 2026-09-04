@@ -4,12 +4,14 @@ import { createContext, useContext, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AgendaAppointment } from "@/lib/agenda-mock";
 import type { StatusKey } from "@/lib/mock-data";
+import type { IdiomaContato } from "@/lib/clientes-mock";
 import {
   createAgendamentoAction,
   updateAgendamentoAction,
   updateStatusAgendamentoAction,
   reagendarAgendamentoAction,
 } from "@/lib/agenda-actions";
+import { registrarMensagemAgendamentoPreparadaAction } from "@/lib/lembretes-actions";
 
 type AgendaContextValue = {
   agendamentos: AgendaAppointment[];
@@ -22,6 +24,16 @@ type AgendaContextValue = {
    * cancelar atendimento, que sincronizam a Agenda na mesma transação). Não escreve no banco —
    * evita uma segunda gravação só para refletir o que o servidor já devolveu. */
   aplicarAgendamentoPersistido: (agendamento: AgendaAppointment) => void;
+  /** Registra em `mensagens_log` que o texto do WhatsApp foi preparado (link aberto para revisão),
+   * nunca que foi enviada — mesmo padrão de `registrarMensagemPreparada` de Lembretes. Fire-and-
+   * forget: não deve bloquear nem atrasar o clique no link de WhatsApp. */
+  registrarMensagemPreparada: (dados: {
+    clienteId: string;
+    papel: "principal" | "secundario";
+    canal: "whatsapp" | "sms";
+    idioma: IdiomaContato;
+    texto: string;
+  }) => void;
 };
 
 const AgendaContext = createContext<AgendaContextValue | null>(null);
@@ -84,6 +96,16 @@ export function AgendaProvider({
     setAgendamentos((prev) => prev.map((item) => (item.id === agendamento.id ? agendamento : item)));
   }
 
+  function registrarMensagemPreparada(dados: {
+    clienteId: string;
+    papel: "principal" | "secundario";
+    canal: "whatsapp" | "sms";
+    idioma: IdiomaContato;
+    texto: string;
+  }) {
+    void registrarMensagemAgendamentoPreparadaAction(dados);
+  }
+
   return (
     <AgendaContext.Provider
       value={{
@@ -94,6 +116,7 @@ export function AgendaProvider({
         updateStatus,
         reagendar,
         aplicarAgendamentoPersistido,
+        registrarMensagemPreparada,
       }}
     >
       {children}

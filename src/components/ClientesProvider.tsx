@@ -3,7 +3,14 @@
 import { createContext, useContext, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Cliente } from "@/lib/clientes-mock";
-import { createClienteAction, updateClienteAction, toggleStatusClienteAction } from "@/lib/clientes-actions";
+import {
+  createClienteAction,
+  updateClienteAction,
+  toggleStatusClienteAction,
+  updateReengajamentoClienteAction,
+} from "@/lib/clientes-actions";
+import { registrarMensagemClientePreparadaAction } from "@/lib/lembretes-actions";
+import type { IdiomaContato, ReengajamentoStatus } from "@/lib/clientes-mock";
 
 type ClientesContextValue = {
   clientes: Cliente[];
@@ -11,6 +18,20 @@ type ClientesContextValue = {
   addCliente: (dados: Omit<Cliente, "id">) => Promise<string>;
   updateCliente: (cliente: Cliente) => Promise<void>;
   toggleStatus: (id: string) => Promise<void>;
+  updateReengajamento: (
+    id: string,
+    dados: { status: Exclude<ReengajamentoStatus, "nenhum">; adiadoAte?: string | null; observacao?: string | null },
+  ) => Promise<void>;
+  /** Audita em `mensagens_log` que o texto de WhatsApp/SMS foi PREPARADO (link aberto pela ficha
+   * da cliente) — nunca que foi enviada. Fire-and-forget: não bloqueia a abertura do app de
+   * mensagens. Mesmo padrão de `registrarMensagemPreparada` do `AgendaProvider`. */
+  registrarMensagemPreparada: (dados: {
+    clienteId: string;
+    papel: "principal" | "secundario";
+    canal: "whatsapp" | "sms";
+    idioma: IdiomaContato;
+    texto: string;
+  }) => void;
 };
 
 const ClientesContext = createContext<ClientesContextValue | null>(null);
@@ -63,8 +84,29 @@ export function ClientesProvider({
     router.refresh();
   }
 
+  async function updateReengajamento(
+    id: string,
+    dados: { status: Exclude<ReengajamentoStatus, "nenhum">; adiadoAte?: string | null; observacao?: string | null },
+  ) {
+    const clienteAtualizado = await updateReengajamentoClienteAction(id, dados);
+    setClientes((prev) => prev.map((item) => (item.id === id ? clienteAtualizado : item)));
+    router.refresh();
+  }
+
+  function registrarMensagemPreparada(dados: {
+    clienteId: string;
+    papel: "principal" | "secundario";
+    canal: "whatsapp" | "sms";
+    idioma: IdiomaContato;
+    texto: string;
+  }) {
+    void registrarMensagemClientePreparadaAction(dados);
+  }
+
   return (
-    <ClientesContext.Provider value={{ clientes, getCliente, addCliente, updateCliente, toggleStatus }}>
+    <ClientesContext.Provider
+      value={{ clientes, getCliente, addCliente, updateCliente, toggleStatus, updateReengajamento, registrarMensagemPreparada }}
+    >
       {children}
     </ClientesContext.Provider>
   );

@@ -1,29 +1,43 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
+import { useAgenda } from "@/components/AgendaProvider";
+import { useAtendimentos } from "@/components/AtendimentosProvider";
 import { ClienteCard } from "@/components/ClienteCard";
 import { ClienteDetailsPanel } from "@/components/ClienteDetailsPanel";
 import { ClienteFormModal } from "@/components/ClienteFormModal";
+import { AgendaFormModal } from "@/components/AgendaFormModal";
+import { AtendimentoFormModal } from "@/components/AtendimentoFormModal";
 import { SearchIcon, UserPlusIcon } from "@/components/icons";
+import type { AgendaAppointment } from "@/lib/agenda-mock";
+import type { Atendimento } from "@/lib/atendimentos-mock";
 import type { Cliente, ClienteStatus } from "@/lib/clientes-mock";
 
-type Filtro = "todas" | "ativas" | "inativas";
+type Filtro = "todas" | "ativas" | "inativas" | "reengajamento";
 type FormState = { modo: "criar" } | { modo: "editar"; cliente: Cliente } | null;
 
 export default function ClientesPage() {
   const { t } = useLanguage();
   const c = t.clientes;
-  const { clientes, addCliente, updateCliente, toggleStatus } = useClientes();
+  const { clientes, addCliente, updateCliente, toggleStatus, updateReengajamento } = useClientes();
+  const { addAgendamento } = useAgenda();
+  const { addAtendimento } = useAtendimentos();
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const hoje = useMemo(() => new Date(), []);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // Deep-link vindo do Financeiro ("Abrir cliente" → /clientes?id=CLI-000001): pré-seleciona a
   // cliente na primeira renderização, sem alterar o fluxo de seleção normal.
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("id"));
   const [formState, setFormState] = useState<FormState>(null);
+  // "Agendar" / "Iniciar atendimento" da ficha: abrem os MESMOS modais de Agenda/Atendimentos,
+  // com a cliente atual pré-selecionada. Nada é criado só pelo clique — a profissional salva o form.
+  const [acaoRapida, setAcaoRapida] = useState<"agendar" | "atendimento" | null>(null);
+  const [erroAcaoRapida, setErroAcaoRapida] = useState<string | null>(null);
   const [erroFormulario, setErroFormulario] = useState<string | null>(null);
   const [erroOperacao, setErroOperacao] = useState<string | null>(null);
 
@@ -33,7 +47,8 @@ export default function ClientesPage() {
       const statusOk =
         filtro === "todas" ||
         (filtro === "ativas" && cliente.status === ("ativa" satisfies ClienteStatus)) ||
-        (filtro === "inativas" && cliente.status === ("inativa" satisfies ClienteStatus));
+        (filtro === "inativas" && cliente.status === ("inativa" satisfies ClienteStatus)) ||
+        (filtro === "reengajamento" && cliente.elegivelReengajamento === true);
       if (!statusOk) return false;
       if (!termo) return true;
       const nomeOk =
@@ -76,6 +91,51 @@ export default function ClientesPage() {
     }
   }
 
+  async function handleReengajamento(
+    id: string,
+    dados: Parameters<typeof updateReengajamento>[1],
+  ) {
+    try {
+      setErroOperacao(null);
+      await updateReengajamento(id, dados);
+      setSelectedId(null);
+    } catch (error) {
+      setErroOperacao(error instanceof Error ? error.message : "Não foi possível registrar a ação de reengajamento.");
+    }
+  }
+
+  // Persistência pelo fluxo atual (`addAgendamento` → `createAgendamentoAction`), com as mesmas
+  // validações de cliente/expediente/conflito. Em erro, o modal continua aberto exibindo a
+  // mensagem (`erroSalvar`). Em sucesso, `addAgendamento` já faz `router.refresh()`, então a
+  // ficha reflete o novo "próximo agendamento" sem sair da tela de Clientes.
+  async function handleSaveAgendamentoRapido(agendamento: AgendaAppointment) {
+    try {
+      setErroAcaoRapida(null);
+      const { id: _idPlaceholder, ...dados } = agendamento;
+      void _idPlaceholder;
+      await addAgendamento(dados);
+      setAcaoRapida(null);
+    } catch (error) {
+      setErroAcaoRapida(error instanceof Error ? error.message : "Não foi possível salvar o agendamento.");
+    }
+  }
+
+  // Mesmo fluxo de "novo atendimento" de encaixe/avulso da tela de Atendimentos (`addAtendimento`
+  // → `createAtendimentoAction`, status "emAndamento", sem concluir nada). Em sucesso, encaminha
+  // para o atendimento recém-criado já selecionado (`/atendimentos?id=…`, deep-link já existente).
+  async function handleSaveAtendimentoRapido(atendimento: Atendimento) {
+    try {
+      setErroAcaoRapida(null);
+      const { id: _idPlaceholder, ...dados } = atendimento;
+      void _idPlaceholder;
+      const novoId = await addAtendimento(dados);
+      setAcaoRapida(null);
+      router.push(`/atendimentos?id=${novoId}`);
+    } catch (error) {
+      setErroAcaoRapida(error instanceof Error ? error.message : "Não foi possível salvar o atendimento.");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
@@ -112,7 +172,7 @@ export default function ClientesPage() {
         </div>
 
         <div className="inline-flex w-fit rounded-xl border border-border bg-surface p-1">
-          {(["todas", "ativas", "inativas"] as const).map((opcao) => (
+          {(["todas", "ativas", "inativas", "reengajamento"] as const).map((opcao) => (
             <button
               key={opcao}
               type="button"
@@ -150,7 +210,16 @@ export default function ClientesPage() {
             cliente={clienteSelecionada}
             onClose={() => setSelectedId(null)}
             onEdit={() => setFormState({ modo: "editar", cliente: clienteSelecionada })}
+            onAgendar={() => {
+              setErroAcaoRapida(null);
+              setAcaoRapida("agendar");
+            }}
+            onIniciarAtendimento={() => {
+              setErroAcaoRapida(null);
+              setAcaoRapida("atendimento");
+            }}
             onToggleStatus={() => handleToggleStatus(clienteSelecionada.id)}
+            onReengajamento={(dados) => handleReengajamento(clienteSelecionada.id, dados)}
           />
         </div>
       )}
@@ -168,7 +237,16 @@ export default function ClientesPage() {
               cliente={clienteSelecionada}
               onClose={() => setSelectedId(null)}
               onEdit={() => setFormState({ modo: "editar", cliente: clienteSelecionada })}
+              onAgendar={() => {
+                setErroAcaoRapida(null);
+                setAcaoRapida("agendar");
+              }}
+              onIniciarAtendimento={() => {
+                setErroAcaoRapida(null);
+                setAcaoRapida("atendimento");
+              }}
               onToggleStatus={() => handleToggleStatus(clienteSelecionada.id)}
+              onReengajamento={(dados) => handleReengajamento(clienteSelecionada.id, dados)}
             />
           </div>
         </div>
@@ -184,6 +262,35 @@ export default function ClientesPage() {
           }}
           onSave={handleSaveCliente}
           erroSalvar={erroFormulario}
+        />
+      )}
+
+      {acaoRapida === "agendar" && clienteSelecionada && (
+        <AgendaFormModal
+          modo="criar"
+          agendamento={null}
+          dataPadrao={hoje}
+          clienteIdPadrao={clienteSelecionada.id}
+          onClose={() => {
+            setErroAcaoRapida(null);
+            setAcaoRapida(null);
+          }}
+          onSave={handleSaveAgendamentoRapido}
+          erroSalvar={erroAcaoRapida}
+        />
+      )}
+
+      {acaoRapida === "atendimento" && clienteSelecionada && (
+        <AtendimentoFormModal
+          modo="criar"
+          atendimento={null}
+          clienteIdPadrao={clienteSelecionada.id}
+          onClose={() => {
+            setErroAcaoRapida(null);
+            setAcaoRapida(null);
+          }}
+          onSave={handleSaveAtendimentoRapido}
+          erroSalvar={erroAcaoRapida}
         />
       )}
     </div>

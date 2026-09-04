@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
 import { validarBackupCompleto } from "@/lib/backup-validation";
 import { obterBackupCompleto, obterCsv } from "@/lib/exportacao";
+import { createClienteAction } from "@/lib/clientes-actions";
 
 describe("exportação de dados", () => {
   it("gera backup completo sem credenciais nem tabelas internas de autenticação", async () => {
@@ -28,5 +32,41 @@ describe("exportação de dados", () => {
       expect(csv.split("\r\n")[0].length).toBeGreaterThan(10);
       expect(csv).not.toMatch(/password|secret|token/i);
     }
+  });
+
+  it("inclui o aniversário da cliente no CSV e no backup JSON completo", async () => {
+    const criada = await createClienteAction({
+      nome: `Cliente Aniversário ${Date.now()}`,
+      nomePreferencia: null,
+      contatoPrincipal: null,
+      contatoSecundario: null,
+      status: "ativa",
+      ultimoAtendimento: "",
+      proximoAgendamento: null,
+      observacoesPt: "",
+      observacoesEn: "",
+      avisosImportantesPt: [],
+      avisosImportantesEn: [],
+      valorPendente: 0,
+      historico: [],
+      aniversarioDia: 7,
+      aniversarioMes: 11,
+      aniversarioAno: 1985,
+    });
+
+    const csv = await obterCsv("clientes");
+    const [cabecalho] = csv.split("\r\n");
+    expect(cabecalho).toContain("aniversarioDia");
+    expect(cabecalho).toContain("aniversarioMes");
+    expect(cabecalho).toContain("aniversarioAno");
+    expect(csv).toContain('"7"');
+    expect(csv).toContain('"11"');
+    expect(csv).toContain('"1985"');
+
+    const backup = await obterBackupCompleto();
+    const linhaBackup = backup.dados.clientes.find((c) => c.id === criada.id);
+    expect(linhaBackup?.aniversarioDia).toBe(7);
+    expect(linhaBackup?.aniversarioMes).toBe(11);
+    expect(linhaBackup?.aniversarioAno).toBe(1985);
   });
 });

@@ -3,9 +3,12 @@
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
 import { useServicos } from "@/components/ServicosProvider";
+import { useAgenda } from "@/components/AgendaProvider";
 import { StatusBadge } from "@/components/StatusBadge";
-import { CloseIcon, PhoneIcon, EditIcon, PlayIcon, CheckIcon, AlertIcon, DoubleCheckIcon, UserXIcon } from "@/components/icons";
+import { CloseIcon, PhoneIcon, EditIcon, PlayIcon, CheckIcon, AlertIcon, DoubleCheckIcon, UserXIcon, ChatIcon } from "@/components/icons";
 import { formatMinutesAsTime, isHorarioAgendamentoPassado } from "@/lib/date";
+import { telefoneValido } from "@/lib/clientes-mock";
+import { buildMensagemContato, whatsappHref } from "@/lib/mensagens";
 import type { AgendaAppointment } from "@/lib/agenda-mock";
 import type { StatusKey } from "@/lib/mock-data";
 
@@ -30,6 +33,12 @@ type AgendaDetailsPanelProps = {
   onEdit: () => void;
   /** Abre o atendimento deste agendamento — cria se ainda não existir, senão só direciona. */
   onIniciarAtendimento: () => void;
+  /** Inicia o atendimento (ou reutiliza o existente, nunca duplica — mesmo mecanismo de
+   * `onIniciarAtendimento`) e leva a profissional direto ao fluxo normal de conclusão em
+   * Atendimentos. O agendamento nunca é marcado como concluído por aqui: só o Atendimento
+   * correspondente pode concluir (`concluirAtendimentoAction`), que depois sincroniza o
+   * agendamento de volta. */
+  onConcluirAtendimento: () => void;
   /** `true` enquanto a abertura do atendimento está em voo, para não criar em duplicidade no duplo clique. */
   iniciandoAtendimento: boolean;
 };
@@ -43,19 +52,47 @@ export function AgendaDetailsPanel({
   onNovoAgendamento,
   onEdit,
   onIniciarAtendimento,
+  onConcluirAtendimento,
   iniciandoAtendimento,
 }: AgendaDetailsPanelProps) {
   const { locale, t } = useLanguage();
   const { getCliente } = useClientes();
   const { getServico } = useServicos();
+  const { registrarMensagemPreparada } = useAgenda();
   const d = t.agenda.detalhes;
   const c = t.clientes;
 
   const cliente = getCliente(appointment.clienteId);
   const nomeExibicao = cliente?.nomePreferencia ?? cliente?.nome ?? "—";
-  const telefone = cliente?.contatoPrincipal?.telefone ?? c.campos.semTelefone;
+  const contatoPrincipal = cliente?.contatoPrincipal ?? null;
+  const telefone = contatoPrincipal?.telefone ?? c.campos.semTelefone;
   const servico = appointment.servicoId ? getServico(appointment.servicoId)?.nome ?? d.aDefinir : d.aDefinir;
   const observacoes = locale === "pt" ? appointment.observacoesPt : appointment.observacoesEn;
+
+  // "Abrir WhatsApp" só existe quando o contato principal tem telefone válido (mesma regra de
+  // `ClienteFormModal`/`createClienteAction`) — sem telefone válido, o botão nem é renderizado, em
+  // vez de aparecer desabilitado (não deve parecer uma ação disponível que não é).
+  const podeAbrirWhatsapp = Boolean(contatoPrincipal && telefoneValido(contatoPrincipal.telefone));
+  const mensagemWhatsapp = contatoPrincipal
+    ? buildMensagemContato(contatoPrincipal.idioma, {
+        nome: nomeExibicao,
+        data: appointment.data,
+        horario: formatMinutesAsTime(appointment.inicioMin),
+        servicoPt: null,
+        servicoEn: null,
+      })
+    : "";
+
+  function handleAbrirWhatsapp() {
+    if (!contatoPrincipal) return;
+    registrarMensagemPreparada({
+      clienteId: appointment.clienteId,
+      papel: "principal",
+      canal: "whatsapp",
+      idioma: contatoPrincipal.idioma,
+      texto: mensagemWhatsapp,
+    });
+  }
 
   const status = appointment.status;
   const pendente = status === "aguardando" || status === "confirmado";
@@ -145,6 +182,15 @@ export function AgendaDetailsPanel({
               <PlayIcon className="h-4 w-4" />
               {d.acoes.iniciarAtendimento}
             </button>
+            <button
+              type="button"
+              onClick={onConcluirAtendimento}
+              disabled={iniciandoAtendimento}
+              className={`col-span-2 ${acaoBotaoClasses}`}
+            >
+              <CheckIcon className="h-4 w-4" />
+              {d.acoes.concluirAtendimento}
+            </button>
             <button type="button" onClick={() => mudarStatus("naoCompareceu")} className={acaoBotaoClasses}>
               <UserXIcon className="h-4 w-4" />
               {d.acoes.marcarNaoCompareceu}
@@ -179,6 +225,15 @@ export function AgendaDetailsPanel({
               <PlayIcon className="h-4 w-4" />
               {d.acoes.iniciarAtendimento}
             </button>
+            <button
+              type="button"
+              onClick={onConcluirAtendimento}
+              disabled={iniciandoAtendimento}
+              className={`col-span-2 ${acaoBotaoClasses}`}
+            >
+              <CheckIcon className="h-4 w-4" />
+              {d.acoes.concluirAtendimento}
+            </button>
             <button type="button" onClick={() => mudarStatus("cancelado")} className={`col-span-2 ${acaoBotaoClasses}`}>
               <CloseIcon className="h-4 w-4" />
               {d.acoes.cancelar}
@@ -186,15 +241,17 @@ export function AgendaDetailsPanel({
           </>
         ) : status === "emAtendimento" ? (
           /* Concluir passa a ser feito no próprio Atendimento, que é onde o pagamento é registrado
-             no livro-razão; concluir só o agendamento aqui deixaria os dois lados incoerentes. */
+             no livro-razão; concluir só o agendamento aqui deixaria os dois lados incoerentes.
+             Este botão reutiliza o atendimento já aberto (nunca duplica) e leva direto ao fluxo
+             normal de conclusão em Atendimentos. */
           <button
             type="button"
-            onClick={onIniciarAtendimento}
+            onClick={onConcluirAtendimento}
             disabled={iniciandoAtendimento}
             className={`col-span-2 ${acaoBotaoDestaqueClasses}`}
           >
             <DoubleCheckIcon className="h-4 w-4" />
-            {d.acoes.abrirAtendimento}
+            {d.acoes.concluirAtendimento}
           </button>
         ) : status === "cancelado" ? (
           <button type="button" onClick={onReagendar} className={`col-span-2 ${acaoBotaoClasses}`}>
@@ -210,9 +267,18 @@ export function AgendaDetailsPanel({
           <EditIcon className="h-4 w-4" />
           {d.acoes.editar}
         </button>
-        <button type="button" title={t.misc.emConstrucao} disabled className={`col-span-2 ${acaoBotaoClasses}`}>
-          {d.acoes.abrirWhatsapp}
-        </button>
+        {podeAbrirWhatsapp && (
+          <a
+            href={whatsappHref(contatoPrincipal!.telefone, mensagemWhatsapp)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleAbrirWhatsapp}
+            className={`col-span-2 ${acaoBotaoClasses}`}
+          >
+            <ChatIcon className="h-4 w-4" />
+            {d.acoes.abrirWhatsapp}
+          </a>
+        )}
       </div>
     </div>
   );

@@ -19,6 +19,7 @@ type AtendimentoDetailsPanelProps = {
   onCancelar: () => void;
   onEstornar: () => void;
   onRegistrarPagamento: () => void;
+  onVerRetornos: () => void;
 };
 
 /** Espelha a restrição real de `registrarPagamentoAdicionalAction` (atendimentos-actions.ts) —
@@ -35,6 +36,7 @@ export function AtendimentoDetailsPanel({
   onCancelar,
   onEstornar,
   onRegistrarPagamento,
+  onVerRetornos,
 }: AtendimentoDetailsPanelProps) {
   const { locale, t } = useLanguage();
   const { getCliente } = useClientes();
@@ -53,6 +55,7 @@ export function AtendimentoDetailsPanel({
   const observacoes = locale === "pt" ? atendimento.observacoesPt : atendimento.observacoesEn;
 
   const isEmAndamento = atendimento.status === "emAndamento";
+  const isConcluido = atendimento.status.startsWith("finalizado");
   const isEncerrado = atendimento.status === "cancelado" || atendimento.status === "estornado";
   const temSaldoPendente = pendente > 0;
   const podeRegistrarPagamento = temSaldoPendente && STATUS_ACEITA_NOVO_PAGAMENTO.has(atendimento.status);
@@ -186,6 +189,17 @@ export function AtendimentoDetailsPanel({
         </dl>
 
         <div className="grid grid-cols-2 gap-2">
+          {isConcluido && (
+            <button
+              type="button"
+              onClick={onVerRetornos}
+              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
+            >
+              <HistoryIcon className="h-4 w-4" />
+              {d.acoes.verRetornos}
+            </button>
+          )}
+
           {isEmAndamento && (
             <button
               type="button"

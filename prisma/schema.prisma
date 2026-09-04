@@ -24,6 +24,12 @@ model Cliente {
   reengajamentoAtualizadoEm DateTime? @map("reengajamento_atualizado_em")
   reengajamentoAdiadoAte    String?   @map("reengajamento_adiado_ate")
   reengajamentoObservacao   String?   @map("reengajamento_observacao")
+  // Aniversário: dia e mês sempre juntos quando informado (ver check constraint na migration);
+  // ano é opcional e nunca é usado para calcular/exibir idade — só para saber "faz aniversário em
+  // que dia", nunca "quantos anos ela faz".
+  aniversarioDia      Int?     @map("aniversario_dia")
+  aniversarioMes      Int?     @map("aniversario_mes")
+  aniversarioAno      Int?     @map("aniversario_ano")
   criadoEm            DateTime @default(now()) @map("criado_em")
   atualizadoEm        DateTime @updatedAt @map("atualizado_em")
 
@@ -35,6 +41,7 @@ model Cliente {
   @@index([status])
   @@index([nome])
   @@index([reengajamentoStatus])
+  @@index([aniversarioMes, aniversarioDia])
   @@map("clientes")
 }
 
@@ -81,6 +88,7 @@ model Servico {
 
   agendamentos        Agendamento[]
   atendimentoServicos AtendimentoServico[]
+  retornosAgendados   RetornoAgendado[]
 
   @@index([status])
   @@index([categoria])
@@ -106,6 +114,7 @@ model Agendamento {
   atendimentosOrigem  Atendimento[] @relation("AgendamentoOrigem")
   atendimentosProximo Atendimento[] @relation("AgendamentoProximo")
   lembrete            Lembrete?
+  retornosAgendados   RetornoAgendado[]
 
   @@index([data, inicioMin])
   @@index([clienteId])
@@ -113,6 +122,14 @@ model Agendamento {
   @@map("agendamentos")
 }
 
+// Além do que está declarado abaixo, a migration 20260901120000 adiciona um índice único PARCIAL
+// em "agendamento_id" (só sobre linhas com status <> 'cancelado' — Prisma não representa índices
+// parciais na DSL, por isso só existe na migration SQL, como as CHECK constraints de `despesas`).
+// Ele garante no próprio Postgres que um agendamento nunca tenha mais de um atendimento ATIVO ao
+// mesmo tempo, fechando a corrida que a checagem dentro da transação de
+// `iniciarAtendimentoDoAgendamentoAction` sozinha não cobre sob concorrência real (duas conexões).
+// Não é um UNIQUE simples: o histórico permite vários atendimentos cancelados (ou um cancelado +
+// um novo ativo) para o mesmo agendamento — só dois ATIVOS ao mesmo tempo é que fica impossível.
 model Atendimento {
   id                   String   @id
   numeroSequencial     Int      @unique @map("numero_sequencial")
@@ -137,11 +154,46 @@ model Atendimento {
   proximoAgendamento Agendamento?         @relation("AgendamentoProximo", fields: [proximoAgendamentoId], references: [id], onDelete: SetNull)
   servicos           AtendimentoServico[]
   pagamentos         Pagamento[]
+  retornosAgendados  RetornoAgendado[]
 
   @@index([clienteId, data])
   @@index([data])
   @@index([status])
   @@map("atendimentos")
+}
+
+// Origem rastreável de cada retorno já gerado a partir de "Próximos Retornos" (Fase 5B+).
+// Existe para uma coisa só: impedir que a MESMA proposta (mesmo atendimento concluído + mesmo
+// serviço de origem) vire um segundo agendamento de retorno se a conclusão/confirmação for
+// repetida (duplo clique, reabrir a prévia, reconcluir um atendimento estornado e concluído de
+// novo). A deduplicação é por ORIGEM (`atendimento_origem_id` + `servico_origem_id`), nunca por
+// nome/data/horário — dois retornos podem legitimamente cair no mesmo dia e horário.
+//
+// `@@unique([atendimentoOrigemId, servicoOrigemId])` é a trava no próprio Postgres (não só na
+// checagem da aplicação): repetir o clique / a confirmação / a conclusão nunca cria um 2º retorno
+// para a mesma origem. Todas as FKs são RESTRICT: uma linha desta tabela nunca apaga nem
+// desvincula silenciosamente o atendimento/serviço/agendamento que ela rastreia — a aplicação
+// não deleta nenhum desses, então RESTRICT é uma segunda camada, não uma restrição operacional.
+// Aditiva: nenhuma linha existente é alterada; nenhum agendamento existente é tocado.
+//
+// `agendamentoId` NÃO é único: no modo "criar um único agendamento combinado" (Fase 5C) os dois
+// serviços de origem viram duas linhas aqui apontando para o MESMO agendamento. `@@index` só.
+model RetornoAgendado {
+  id                 String   @id
+  numeroSequencial   Int      @unique @map("numero_sequencial")
+  atendimentoOrigemId String  @map("atendimento_origem_id")
+  servicoOrigemId    String   @map("servico_origem_id")
+  agendamentoId      String   @map("agendamento_id")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+
+  atendimentoOrigem Atendimento @relation(fields: [atendimentoOrigemId], references: [id], onDelete: Restrict)
+  servicoOrigem     Servico     @relation(fields: [servicoOrigemId], references: [id], onDelete: Restrict)
+  agendamento       Agendamento @relation(fields: [agendamentoId], references: [id], onDelete: Restrict)
+
+  @@unique([atendimentoOrigemId, servicoOrigemId])
+  @@index([atendimentoOrigemId])
+  @@index([agendamentoId])
+  @@map("retornos_agendados")
 }
 
 model AtendimentoServico {

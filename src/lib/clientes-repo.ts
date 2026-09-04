@@ -12,7 +12,7 @@ import type {
 import { statusHistoricoDeAtendimento } from "@/lib/clientes-mock";
 import type { AtendimentoStatus } from "@/lib/atendimentos-mock";
 import { STATUS_ATENDIMENTO_REALIZADO } from "@/lib/atendimentos-mock";
-import { isoToMMDDYYYY, formatMinutesAsTime, formatDateISO } from "@/lib/date";
+import { addDays, isoToMMDDYYYY, formatMinutesAsTime, formatDateISO } from "@/lib/date";
 import type { PagamentoRow } from "@/lib/pagamentos-repo";
 import {
   STATUS_ATENDIMENTO_COM_SALDO_ABERTO,
@@ -68,6 +68,9 @@ type ClienteRow = {
   reengajamentoAtualizadoEm: Date | null;
   reengajamentoAdiadoAte: string | null;
   reengajamentoObservacao: string | null;
+  aniversarioDia: number | null;
+  aniversarioMes: number | null;
+  aniversarioAno: number | null;
   contatos: ({ papel: string } & ContatoRow)[];
   atendimentos: AtendimentoHistoricoRow[];
   agendamentos: AgendamentoProximoRow[];
@@ -124,6 +127,27 @@ function calcularProximoAgendamento(agendamentos: AgendamentoProximoRow[]): stri
   return `${isoToMMDDYYYY(proximo.data)} · ${formatMinutesAsTime(proximo.inicioMin)}`;
 }
 
+/** Regra derivada de DATABASE_DESIGN.md §4.1.1. Recebe a data para manter testes determinísticos. */
+export function clienteElegivelParaReengajamento(row: ClienteRow, hoje = new Date()): boolean {
+  if (row.status !== "ativa") return false;
+  const hojeIso = formatDateISO(hoje);
+  const limiteIso = formatDateISO(addDays(hoje, -30));
+  const teveAtendimentoRecente = row.atendimentos.some(
+    (atendimento) =>
+      atendimento.status !== "cancelado" && atendimento.status !== "estornado" && atendimento.data >= limiteIso,
+  );
+  const temAgendamentoFuturo = row.agendamentos.some(
+    (agendamento) =>
+      agendamento.data >= hojeIso && agendamento.status !== "cancelado" && agendamento.status !== "naoCompareceu",
+  );
+  const decisaoPermiteExibir =
+    row.reengajamentoStatus === "nenhum" ||
+    (row.reengajamentoStatus === "adiado" &&
+      row.reengajamentoAdiadoAte !== null &&
+      row.reengajamentoAdiadoAte <= hojeIso);
+  return !teveAtendimentoRecente && !temAgendamentoFuturo && decisaoPermiteExibir;
+}
+
 /**
  * Saldo pendente (nunca negativo) de um atendimento, considerando só natureza `servico` do
  * ledger — gorjeta nunca é dívida. Atendimentos fora de `STATUS_ATENDIMENTO_COM_SALDO_ABERTO`
@@ -173,6 +197,10 @@ export function mapClienteRow(row: ClienteRow): Cliente {
     reengajamentoAtualizadoEm: row.reengajamentoAtualizadoEm ? row.reengajamentoAtualizadoEm.toISOString() : null,
     reengajamentoAdiadoAte: row.reengajamentoAdiadoAte,
     reengajamentoObservacao: row.reengajamentoObservacao,
+    elegivelReengajamento: clienteElegivelParaReengajamento(row),
+    aniversarioDia: row.aniversarioDia,
+    aniversarioMes: row.aniversarioMes,
+    aniversarioAno: row.aniversarioAno,
   };
 }
 

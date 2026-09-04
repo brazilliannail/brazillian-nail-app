@@ -72,8 +72,29 @@ function apenasDigitos(telefone: string) {
   return telefone.replace(/\D/g, "");
 }
 
+/**
+ * Normaliza um telefone (armazenado com qualquer formatação — parênteses, espaços, traços, "+")
+ * para os dígitos que o link `wa.me` espera, SEM alterar/retornar o telefone armazenado (esta
+ * função só lê `telefone`, nunca o reescreve em lugar nenhum): 10 dígitos (número local dos EUA)
+ * ganham o prefixo `1`; 11 dígitos já começando com `1` (com ou sem "+" na formatação original,
+ * que já cai fora ao tirar os não-dígitos) NÃO ganham um `1` extra — bug anterior desta função, que
+ * sempre prefixava `1` cegamente e gerava `wa.me/115085550100` (11 dígitos + 1 extra) para números
+ * já completos. Outros comprimentos (ex.: DDI de outro país) são repassados como estão, sem inventar
+ * prefixo dos EUA.
+ */
+function normalizarDigitosWhatsapp(telefone: string): string {
+  const digitos = apenasDigitos(telefone);
+  if (digitos.length === 10) return `1${digitos}`;
+  if (digitos.length === 11 && digitos.startsWith("1")) return digitos;
+  return digitos;
+}
+
+/** Entrada vazia/sem dígitos não produz um link "funcional" (não abre um chat aleatório no
+ * WhatsApp) — retorna string vazia, que como `href` de um link apenas não navega a lugar nenhum. */
 export function whatsappHref(telefone: string, mensagem: string) {
-  return `https://wa.me/1${apenasDigitos(telefone)}?text=${encodeURIComponent(mensagem)}`;
+  const digitos = normalizarDigitosWhatsapp(telefone);
+  if (digitos === "") return "";
+  return `https://wa.me/${digitos}?text=${encodeURIComponent(mensagem)}`;
 }
 
 export function smsHref(telefone: string, mensagem: string) {

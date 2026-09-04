@@ -13,9 +13,23 @@ type ValorPendenteCardProps = {
   pendente: PendenciaFinanceira;
   selected: boolean;
   onSelect: () => void;
+  onRegistrarPagamento: () => void;
+  onAbrirAtendimento: () => void;
+  onAbrirFicha: () => void;
+  whatsappHref: string | null;
+  onAbrirWhatsapp: () => void;
 };
 
-export function ValorPendenteCard({ pendente, selected, onSelect }: ValorPendenteCardProps) {
+export function ValorPendenteCard({
+  pendente,
+  selected,
+  onSelect,
+  onRegistrarPagamento,
+  onAbrirAtendimento,
+  onAbrirFicha,
+  whatsappHref,
+  onAbrirWhatsapp,
+}: ValorPendenteCardProps) {
   const { t } = useLanguage();
   const { visible } = useFinancialVisibility();
   const v = t.financeiro.valoresPendentes;
@@ -58,6 +72,7 @@ export function ValorPendenteCard({ pendente, selected, onSelect }: ValorPendent
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
+          onClick={onRegistrarPagamento}
           className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
         >
           <CashIcon className="h-4 w-4" />
@@ -65,6 +80,7 @@ export function ValorPendenteCard({ pendente, selected, onSelect }: ValorPendent
         </button>
         <button
           type="button"
+          onClick={onAbrirAtendimento}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-xs font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
         >
           <CalendarIcon className="h-4 w-4" />
@@ -72,18 +88,33 @@ export function ValorPendenteCard({ pendente, selected, onSelect }: ValorPendent
         </button>
         <button
           type="button"
+          onClick={onAbrirFicha}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-xs font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
         >
           <UsersIcon className="h-4 w-4" />
           {v.acoes.abrirFicha}
         </button>
-        <button
-          type="button"
-          className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-xs font-medium text-foreground/80 transition-transform hover:bg-muted active:scale-[0.98]"
+        <a
+          href={whatsappHref ?? undefined}
+          target={whatsappHref ? "_blank" : undefined}
+          rel={whatsappHref ? "noreferrer" : undefined}
+          aria-disabled={!whatsappHref}
+          onClick={(event) => {
+            if (!whatsappHref) {
+              event.preventDefault();
+              return;
+            }
+            onAbrirWhatsapp();
+          }}
+          className={`col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-xs font-medium transition-transform ${
+            whatsappHref
+              ? "text-foreground/80 hover:bg-muted active:scale-[0.98]"
+              : "cursor-not-allowed text-foreground/30"
+          }`}
         >
           <ChatIcon className="h-4 w-4" />
           {v.acoes.abrirWhatsapp}
-        </button>
+        </a>
       </div>
     </div>
   );

@@ -9,11 +9,15 @@ import { CloseIcon, AlertIcon } from "@/components/icons";
 import { SLOT_MIN, buildTimeBoundaries, type AgendaAppointment } from "@/lib/agenda-mock";
 import { expedienteDeConfiguracoes, diaSemanaDeData } from "@/lib/configuracoes-mock";
 import { formatDateISO, parseDateISO, formatDateMMDDYYYY, parseDateMMDDYYYY, formatMinutesAsTime } from "@/lib/date";
+import { ordenarPorTexto } from "@/lib/ordenacao";
 
 type AgendaFormModalProps = {
   modo: "criar" | "editar";
   agendamento: AgendaAppointment | null;
   dataPadrao: Date;
+  /** Cliente pré-selecionada ao abrir em modo "criar" (ex.: a partir da ficha da cliente). A
+   * profissional ainda pode trocá-la no seletor antes de salvar. Ignorada em modo "editar". */
+  clienteIdPadrao?: string;
   onClose: () => void;
   onSave: (agendamento: AgendaAppointment) => void;
   erroSalvar?: string | null;
@@ -22,7 +26,7 @@ type AgendaFormModalProps = {
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/40";
 
-export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave, erroSalvar }: AgendaFormModalProps) {
+export function AgendaFormModal({ modo, agendamento, dataPadrao, clienteIdPadrao, onClose, onSave, erroSalvar }: AgendaFormModalProps) {
   const { t } = useLanguage();
   const { clientes } = useClientes();
   const { servicos } = useServicos();
@@ -31,7 +35,8 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
 
   const expediente = useMemo(() => expedienteDeConfiguracoes(configuracoes.agenda), [configuracoes.agenda]);
 
-  const [clienteId, setClienteId] = useState(agendamento?.clienteId ?? "");
+  const clienteInicial = agendamento?.clienteId ?? clienteIdPadrao ?? "";
+  const [clienteId, setClienteId] = useState(clienteInicial);
   const [servicoId, setServicoId] = useState(agendamento?.servicoId ?? "");
   const [dataIso, setDataIso] = useState(() =>
     agendamento ? formatDateISO(parseDateMMDDYYYY(agendamento.data)) : formatDateISO(dataPadrao),
@@ -47,14 +52,21 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
   const [erro, setErro] = useState<string | null>(null);
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
 
+  // Ordenação alfabética (ignorando acentos/maiúsculas) só na apresentação destes seletores — não
+  // altera a ordem de armazenamento nem a de nenhuma outra tela (ex.: listagens de Clientes/Serviços).
+  const clientesOrdenados = useMemo(
+    () => ordenarPorTexto(clientes, (cliente) => cliente.nomePreferencia ?? cliente.nome),
+    [clientes],
+  );
   const opcoesServico = servicos.filter((servico) => servico.status === "ativo" || servico.id === agendamento?.servicoId);
+  const opcoesServicoOrdenadas = useMemo(() => ordenarPorTexto(opcoesServico, (servico) => servico.nome), [opcoesServico]);
   const horariosInicio = buildTimeBoundaries(expediente.inicioMin, expediente.fimMin).filter((min) => min < expediente.fimMin);
   const horariosFim = buildTimeBoundaries(expediente.inicioMin, expediente.fimMin).filter(
     (min) => min > inicioMin && min <= expediente.fimMin,
   );
 
   const houveAlteracoes =
-    clienteId !== (agendamento?.clienteId ?? "") ||
+    clienteId !== clienteInicial ||
     servicoId !== (agendamento?.servicoId ?? "") ||
     dataIso !== (agendamento ? formatDateISO(parseDateMMDDYYYY(agendamento.data)) : formatDateISO(dataPadrao)) ||
     inicioMin !== (agendamento?.inicioMin ?? expediente.inicioMin) ||
@@ -171,7 +183,7 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
             <span className="text-sm font-medium text-foreground/70">{f.cliente}</span>
             <select value={clienteId} onChange={(event) => setClienteId(event.target.value)} className={inputClass}>
               <option value="">{f.clientePlaceholder}</option>
-              {clientes.map((cliente) => (
+              {clientesOrdenados.map((cliente) => (
                 <option key={cliente.id} value={cliente.id}>
                   {cliente.nomePreferencia ?? cliente.nome}
                 </option>
@@ -183,7 +195,7 @@ export function AgendaFormModal({ modo, agendamento, dataPadrao, onClose, onSave
             <span className="text-sm font-medium text-foreground/70">{f.servico}</span>
             <select value={servicoId} onChange={(event) => handleServicoChange(event.target.value)} className={inputClass}>
               <option value="">{f.servicoADefinir}</option>
-              {opcoesServico.map((servico) => (
+              {opcoesServicoOrdenadas.map((servico) => (
                 <option key={servico.id} value={servico.id}>
                   {servico.nome}
                 </option>
