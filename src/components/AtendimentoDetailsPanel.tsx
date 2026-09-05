@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useClientes } from "@/components/ClientesProvider";
+import { useAgenda } from "@/components/AgendaProvider";
 import { AtendimentoStatusBadge } from "@/components/AtendimentoStatusBadge";
 import { CloseIcon, EditIcon, DoubleCheckIcon, HistoryIcon, AlertIcon, PlusIcon } from "@/components/icons";
+import { formatMinutesAsTime } from "@/lib/date";
 import { valorTotalDevido, saldoPendente, type Atendimento } from "@/lib/atendimentos-mock";
 
 function formatCurrency(value: number) {
@@ -40,9 +42,17 @@ export function AtendimentoDetailsPanel({
 }: AtendimentoDetailsPanelProps) {
   const { locale, t } = useLanguage();
   const { getCliente } = useClientes();
+  const { getAgendamento } = useAgenda();
   const a = t.atendimentos;
   const c = t.clientes;
   const d = a.detalhes;
+
+  // Retorno gerado a partir deste atendimento (Próximos Retornos): `proximoAgendamentoId` é
+  // preenchido por `confirmarRetornosAction`. Resolve data/horário pelo AgendaProvider — sem
+  // consulta nova nem alteração do repositório de Atendimentos.
+  const proximoAgendamento = atendimento.proximoAgendamentoId
+    ? getAgendamento(atendimento.proximoAgendamentoId)
+    : undefined;
 
   const [confirmando, setConfirmando] = useState<"cancelar" | "estornar" | null>(null);
 
@@ -186,6 +196,16 @@ export function AtendimentoDetailsPanel({
                 : `${atendimento.retornoSugeridoDias} ${d.dias}`}
             </dd>
           </div>
+          {isConcluido && (
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-foreground/50">{d.proximoAgendamento}</dt>
+              <dd className="font-medium text-foreground">
+                {proximoAgendamento
+                  ? `${proximoAgendamento.data} · ${formatMinutesAsTime(proximoAgendamento.inicioMin)}`
+                  : d.semProximoAgendamento}
+              </dd>
+            </div>
+          )}
         </dl>
 
         <div className="grid grid-cols-2 gap-2">

@@ -8,6 +8,7 @@ import { getConfiguracoes } from "@/lib/configuracoes-repo";
 import { expedienteDeConfiguracoes, type Expediente } from "@/lib/configuracoes-mock";
 import { parseTimeToMinutes } from "@/lib/date";
 import { STATUS_ATENDIMENTO_FATURAMENTO } from "@/lib/atendimentos-mock";
+import { sincronizarProximoAgendamento } from "@/lib/proximos-retornos-sync";
 import {
   avaliarPropostaRetorno,
   calcularDataRetorno,
@@ -609,6 +610,11 @@ export async function confirmarRetornosAction(entrada: EntradaConfirmacaoRetorno
 
   const gravados = itens.filter((i) => i.tipo === "gravado").length;
   const precisaReconfirmar = itens.some((i) => i.tipo === "reconfirmar");
+  // Recalcula o ponteiro "próximo agendamento" sempre que este atendimento tem algum retorno
+  // (recém-gravado ou já existente) — self-healing mesmo em reconfirmações repetidas.
+  if (itens.some((i) => i.tipo === "gravado" || i.tipo === "jaExistente")) {
+    await sincronizarProximoAgendamento(prisma, atendimento.id);
+  }
   if (gravados > 0) revalidatePath("/", "layout");
 
   return { itens, gravados, precisaReconfirmar };

@@ -46,9 +46,19 @@ async function criarMensagemLogComRetry(data: NovaMensagemLog): Promise<void> {
  * ligada a este lembrete em `mensagens_log` (ver DATABASE_DESIGN.md §4.10). */
 export async function updateStatusLembreteAction(id: string, status: LembreteStatus): Promise<void> {
   await requireRosangela();
-  const existente = await prisma.lembrete.findUnique({ where: { id } });
+  const existente = await prisma.lembrete.findUnique({
+    where: { id },
+    include: { agendamento: { include: { cliente: { include: { contatos: true } } } } },
+  });
   if (!existente) {
     throw new Error("Lembrete não encontrado.");
+  }
+
+  if (status === "preparado" || status === "enviado") {
+    const contatoPrincipal = existente.agendamento.cliente.contatos.find((contato) => contato.papel === "principal");
+    if (!existente.consentimentoRegistrado || !contatoPrincipal?.receberLembretes) {
+      throw new Error("Não é possível preparar ou enviar um lembrete sem consentimento registrado.");
+    }
   }
 
   await prisma.$transaction(async (tx) => {

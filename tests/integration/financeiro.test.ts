@@ -6,12 +6,15 @@ import {
   detalharPorCliente,
   detalharPorServico,
   listarPendencias,
+  listarAtendimentosFinanceiros,
+  buscarAtendimentoFinanceiro,
   calcularSaldoAbertoGlobal,
   detalharPorFormaPagamento,
   detalharPorStatusPagamento,
   statusPagamentoDeAtendimento,
 } from "@/lib/financeiro-service";
 import type { Atendimento, AtendimentoStatus, ServicoRealizado } from "@/lib/atendimentos-mock";
+import type { Cliente } from "@/lib/clientes-mock";
 import type { LancamentoCaixa } from "@/lib/financeiro-repo";
 import type { DateRange } from "@/lib/financeiro-comparacao";
 
@@ -201,5 +204,54 @@ describe("financeiro-service — detalhamentos e limites do período", () => {
       { status: "recebido", valor: 100 },
       { status: "parcial", valor: 60 },
     ]);
+  });
+
+  // Contrato usado pelo clique no `ValorPendenteCard` (Financeiro): selecionar uma pendência
+  // precisa abrir o painel de detalhes do MESMO atendimento — nunca de outro, nunca vazio quando
+  // a pendência existe. `buscarAtendimentoFinanceiro` é a função que resolve isso (ver seu próprio
+  // docstring); estes testes travam esse contrato sem depender de React/DOM.
+  describe("seleção de 'Valores pendentes' → painel de detalhes (buscarAtendimentoFinanceiro)", () => {
+    it("cada pendência listada é resolvida para o MESMO atendimento pelo id (seleção correta)", () => {
+      const clientesPorId = new Map<string, Cliente>();
+      const a = criarAtendimento({ status: "finalizadoPendente", servicos: [criarServico(80)], clienteId: "CLI-000001", valorRecebido: 0 });
+      const b = criarAtendimento({ status: "finalizadoParcial", servicos: [criarServico(50)], clienteId: "CLI-000002", valorRecebido: 20 });
+      const atendimentos = [a, b];
+
+      const pendencias = listarPendencias(atendimentos, clientesPorId, new Date(2026, 7, 2));
+      expect(pendencias).toHaveLength(2);
+
+      for (const pendente of pendencias) {
+        const resolvido = buscarAtendimentoFinanceiro(pendente.atendimentoId, atendimentos, clientesPorId, []);
+        expect(resolvido).not.toBeNull();
+        expect(resolvido?.atendimentoId).toBe(pendente.atendimentoId);
+        expect(resolvido?.clienteId).toBe(pendente.clienteId);
+        expect(resolvido?.saldoPendente).toBe(pendente.saldoPendente);
+      }
+    });
+
+    it("atendimento inexistente não resolve nada — o clique não deve abrir painel algum", () => {
+      expect(buscarAtendimentoFinanceiro("ATD-999999", [], new Map(), [])).toBeNull();
+
+      const existente = criarAtendimento({ status: "finalizadoPendente", servicos: [criarServico(30)] });
+      expect(buscarAtendimentoFinanceiro("ATD-999999", [existente], new Map(), [])).toBeNull();
+    });
+
+    it("encontra a pendência mesmo fora do período do Dashboard (diferente da lista filtrada por período)", () => {
+      const foraDoPeriodo = criarAtendimento({
+        status: "finalizadoPendente",
+        servicos: [criarServico(90)],
+        data: "01/05/2026", // bem antes de RANGE_HOJE (08/02/2026)
+        valorRecebido: 0,
+      });
+
+      // A lista financeira "por período" (Dashboard) não inclui este atendimento.
+      expect(listarAtendimentosFinanceiros([foraDoPeriodo], new Map(), [], RANGE_HOJE)).toHaveLength(0);
+      // Mas ele continua pendente globalmente e é o que "Valores pendentes" lista/abre.
+      const pendencias = listarPendencias([foraDoPeriodo], new Map(), new Date(2026, 7, 2));
+      expect(pendencias).toHaveLength(1);
+      const resolvido = buscarAtendimentoFinanceiro(pendencias[0].atendimentoId, [foraDoPeriodo], new Map(), []);
+      expect(resolvido?.atendimentoId).toBe(foraDoPeriodo.id);
+      expect(resolvido?.saldoPendente).toBe(pendencias[0].saldoPendente);
+    });
   });
 });

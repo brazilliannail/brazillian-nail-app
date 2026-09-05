@@ -19,6 +19,7 @@ import { formatPagamentoId } from "@/lib/pagamentos-mock";
 import { calcularValorRecebidoServico } from "@/lib/pagamentos-repo";
 import { Prisma } from "@/generated/prisma/client";
 import { requireRosangela } from "@/lib/auth/authorization";
+import { sincronizarOrigensDoAgendamento } from "@/lib/proximos-retornos-sync";
 
 type Tx = Prisma.TransactionClient;
 
@@ -285,6 +286,10 @@ export async function iniciarAtendimentoDoAgendamentoAction(
           ? agendamento
           : await tx.agendamento.update({ where: { id: agendamento.id }, data: { status: "emAtendimento" } });
 
+      if (agendamentoAtualizado.status === "emAtendimento") {
+        await sincronizarOrigensDoAgendamento(tx, agendamento.id);
+      }
+
       return {
         atendimento: await buscarAtendimentoCompleto(tx, id),
         agendamento: mapAgendamentoRow(agendamentoAtualizado),
@@ -385,6 +390,7 @@ async function sincronizarAgendamentoDoAtendimento(
   const agendamento = await tx.agendamento.findUnique({ where: { id: agendamentoId } });
   if (!agendamento || agendamento.status !== "emAtendimento") return null;
   const atualizado = await tx.agendamento.update({ where: { id: agendamentoId }, data: { status: novoStatus } });
+  await sincronizarOrigensDoAgendamento(tx, agendamentoId);
   return mapAgendamentoRow(atualizado);
 }
 

@@ -71,8 +71,9 @@ export function LembreteDetailsPanel({
   const naoRecebeLembretes = !semTelefone && !receberLembretes;
   const status = lembrete.statusLembrete;
 
-  const podeMarcarPreparada = !semTelefone && status === "pendente";
-  const podeMarcarEnviada = !semTelefone && (status === "pendente" || status === "preparado");
+  const podeEnviar = !semTelefone && receberLembretes && lembrete.consentimentoRegistrado;
+  const podeMarcarPreparada = podeEnviar && status === "pendente";
+  const podeMarcarEnviada = podeEnviar && (status === "pendente" || status === "preparado");
   const enviadaDestacada = status === "preparado";
   const podeMarcarTratada = semTelefone && status === "indisponivel";
   const podeIgnorarOuReativar = status !== "enviado" && status !== "tratadoPessoalmente";

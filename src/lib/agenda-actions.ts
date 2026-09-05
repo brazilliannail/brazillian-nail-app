@@ -9,6 +9,7 @@ import { mmddyyyyToISO, parseDateISO } from "@/lib/date";
 import { getConfiguracoes } from "@/lib/configuracoes-repo";
 import { expedienteDeConfiguracoes, diaSemanaDeData, type Expediente } from "@/lib/configuracoes-mock";
 import { requireRosangela } from "@/lib/auth/authorization";
+import { sincronizarOrigensDoAgendamento } from "@/lib/proximos-retornos-sync";
 
 /** Próximo id de agendamento, a partir de `numero_sequencial` (coluna indexada e única — mesmo
  * padrão usado por `clientes`). Substitui a varredura completa da tabela + regex usada antes. */
@@ -150,6 +151,8 @@ export async function updateAgendamentoAction(agendamento: AgendaAppointment): P
     },
   });
 
+  await sincronizarOrigensDoAgendamento(prisma, row.id);
+
   revalidatePath("/", "layout");
   return mapAgendamentoRow(row);
 }
@@ -180,6 +183,7 @@ export async function updateStatusAgendamentoAction(id: string, status: StatusKe
   }
 
   const row = await prisma.agendamento.update({ where: { id }, data: { status } });
+  await sincronizarOrigensDoAgendamento(prisma, row.id);
   revalidatePath("/", "layout");
   return mapAgendamentoRow(row);
 }
@@ -236,6 +240,8 @@ export async function reagendarAgendamentoAction(
       status: "aguardando",
     },
   });
+
+  await sincronizarOrigensDoAgendamento(prisma, row.id);
 
   revalidatePath("/", "layout");
   return mapAgendamentoRow(row);

@@ -99,7 +99,14 @@ export async function getLembretesAmanha(ativarLembretesDiaAnterior: boolean): P
   await garantirLembretesDoDia(amanhaIso, ativarLembretesDiaAnterior);
 
   const rows = await prisma.lembrete.findMany({
-    where: { agendamento: { data: amanhaIso } },
+    // Um lembrete já persistido continua como histórico, mas deixa de ser acionável/visível se o
+    // agendamento for cancelado, concluído, marcado como falta ou iniciado posteriormente.
+    where: {
+      agendamento: {
+        data: amanhaIso,
+        status: { in: [...STATUS_AGENDAMENTO_COM_LEMBRETE] },
+      },
+    },
     include: includeLembrete,
     orderBy: { agendamento: { inicioMin: "asc" } },
   });

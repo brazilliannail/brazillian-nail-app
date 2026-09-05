@@ -60,6 +60,16 @@ describe("lembretes (lembretes-repo + lembretes-actions)", () => {
     expect(lembrete!.consentimentoRegistrado).toBe(false);
   });
 
+  it("sem consentimento não permite preparar nem marcar como enviado", async () => {
+    const cliente = await criarClienteComContatoTeste({ contatoPrincipal: { receberLembretes: false } });
+    await criarAgendamentoAmanhaTeste({ clienteId: cliente.id });
+    const lembrete = (await getLembretesAmanha(true)).find((item) => item.clienteId === cliente.id)!;
+
+    await expect(updateStatusLembreteAction(lembrete.id, "preparado")).rejects.toThrow("sem consentimento");
+    await expect(updateStatusLembreteAction(lembrete.id, "enviado")).rejects.toThrow("sem consentimento");
+    expect((await prisma.lembrete.findUniqueOrThrow({ where: { id: lembrete.id } })).statusLembrete).toBe("pendente");
+  });
+
   it("respeita 'ativarLembretesDiaAnterior = false': não gera lembrete nenhum", async () => {
     const cliente = await criarClienteComContatoTeste();
     await criarAgendamentoAmanhaTeste({ clienteId: cliente.id });
@@ -102,6 +112,27 @@ describe("lembretes (lembretes-repo + lembretes-actions)", () => {
     const mensagemDepois = await prisma.mensagemLog.findFirst({ where: { lembreteId: lembrete.id } });
     expect(mensagemDepois?.statusMensagem).toBe("enviada");
     expect(mensagemDepois?.confirmadoEm).not.toBeNull();
+  });
+
+  it("permite ignorar e depois reativar um lembrete com contato", async () => {
+    const cliente = await criarClienteComContatoTeste();
+    await criarAgendamentoAmanhaTeste({ clienteId: cliente.id });
+    const lembrete = (await getLembretesAmanha(true)).find((item) => item.clienteId === cliente.id)!;
+
+    await updateStatusLembreteAction(lembrete.id, "ignorado");
+    expect((await prisma.lembrete.findUniqueOrThrow({ where: { id: lembrete.id } })).statusLembrete).toBe("ignorado");
+    await updateStatusLembreteAction(lembrete.id, "pendente");
+    expect((await prisma.lembrete.findUniqueOrThrow({ where: { id: lembrete.id } })).statusLembrete).toBe("pendente");
+  });
+
+  it("lembrete indisponível pode ser tratado pessoalmente", async () => {
+    const cliente = await criarClienteComContatoTeste({ comContatoPrincipal: false });
+    await criarAgendamentoAmanhaTeste({ clienteId: cliente.id });
+    const lembrete = (await getLembretesAmanha(true)).find((item) => item.clienteId === cliente.id)!;
+
+    await updateStatusLembreteAction(lembrete.id, "tratadoPessoalmente");
+
+    expect((await prisma.lembrete.findUniqueOrThrow({ where: { id: lembrete.id } })).statusLembrete).toBe("tratadoPessoalmente");
   });
 
   it("registrarMensagemPreparadaAction resolve o contato correto pelo papel (principal/secundario)", async () => {

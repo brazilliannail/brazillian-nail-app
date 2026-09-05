@@ -76,7 +76,12 @@ type ClienteRow = {
   agendamentos: AgendamentoProximoRow[];
 };
 
-const STATUS_AGENDAMENTO_FUTURO = new Set(["aguardando", "confirmado"]);
+/** O que conta como um agendamento futuro de verdade (não só "não cancelado"): usado tanto para o
+ * "Próximo agendamento" da Cliente (abaixo) quanto para o mesmo conceito no Atendimento de origem
+ * (`proximos-retornos-actions.ts`) — uma só definição, para as duas telas nunca divergirem sobre o
+ * que é "próximo". Exclui `emAtendimento`/`concluido`/`naoCompareceu` (já aconteceu ou está
+ * acontecendo agora) além de `cancelado`. */
+export const STATUS_AGENDAMENTO_FUTURO = new Set(["aguardando", "confirmado"]);
 function mapContato(row: ContatoRow): Contato {
   return {
     nomeContato: row.nomeContato,

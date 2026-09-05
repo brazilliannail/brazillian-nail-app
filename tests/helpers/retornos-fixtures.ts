@@ -3,6 +3,7 @@ import { createAtendimentoAction, concluirAtendimentoAction } from "@/lib/atendi
 import { prisma } from "@/lib/db";
 import { addDays, formatDateMMDDYYYY } from "@/lib/date";
 import { criarClienteTeste } from "./ledger-fixtures";
+import type { Cliente } from "@/lib/clientes-mock";
 
 let contador = 0;
 export function sufixoRetorno() {
@@ -54,10 +55,11 @@ export async function criarServicoComRetorno(params: {
 /** Atendimento concluído (finalizadoPago) com os serviços de catálogo informados. */
 export async function criarAtendimentoConcluido(params: {
   servicos: { id: string; nomePt: string; nomeEn: string | null }[];
+  cliente?: Cliente;
   data?: string;
   horarioInicio?: string;
 }) {
-  const cliente = await criarClienteTeste();
+  const cliente = params.cliente ?? (await criarClienteTeste());
   const criado = await createAtendimentoAction({
     clienteId: cliente.id,
     agendamentoId: null,

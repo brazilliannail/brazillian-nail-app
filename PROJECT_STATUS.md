@@ -298,3 +298,26 @@ Testes novos em `tests/integration/reengajamento.test.ts`: elegibilidade sem his
 - Os quatro controles que já apareciam nos cartões de **Valores pendentes** foram conectados: registrar pagamento abre o modal do atendimento correto; abrir atendimento e abrir ficha navegam com o identificador correto; WhatsApp prepara uma mensagem genérica sem revelar valor financeiro e só fica ativo para contato principal autorizado cujo canal inclui WhatsApp. O clique é auditado como mensagem preparada.
 - Validação final: **266/266 testes passando em 25 arquivos**, typecheck, lint, `git diff --check` e build aprovados. Testes usam PostgreSQL descartável em memória; o build usou somente variáveis fictícias no processo. A validação visual conseguiu abrir e renderizar a tela local de autenticação, mas não entrou no Financeiro: não há sessão local nem credenciais fictícias funcionais de autenticação/banco. Nenhum dado real foi acessado e o servidor local foi encerrado.
 - Nenhum commit, push, deploy ou alteração em produção foi realizado.
+
+---
+
+## 19. Fechamento do ciclo Atendimento → Retorno → Lembrete → Reagendamento (2026-09-04)
+
+- `Atendimento.proximoAgendamentoId` agora é preenchido ao confirmar retornos e recalculado quando
+  o retorno é editado, reagendado, cancelado, marcado como falta, iniciado ou concluído. O ponteiro
+  considera somente agendamentos futuros em `aguardando`/`confirmado`; `retornos_agendados`
+  permanece como histórico completo e rastreável.
+- O painel do atendimento concluído exibe o próximo agendamento gerado. A ficha da cliente e o
+  atendimento usam a mesma definição de agendamento futuro.
+- Lembretes existentes de agendamentos cancelados, concluídos, em atendimento ou sem comparecimento
+  deixam de aparecer na lista operacional de amanhã sem que a linha histórica seja apagada.
+- Preparar ou marcar um lembrete como enviado exige consentimento registrado e contato principal
+  ainda autorizado. A regra é aplicada no servidor e os botões correspondentes só aparecem quando
+  a ação é válida. Ignorar, reativar e tratar pessoalmente continuam disponíveis nos estados
+  previstos.
+- Cobertura integrada adicionada para cancelamento, reagendamento, início e conclusão de retornos,
+  falta, múltiplos retornos da mesma cliente, preservação histórica e ciclo dos estados do lembrete.
+- A validação visual autenticada permanece pendente: o checkout não contém configuração local
+  segura do Neon Auth/PostgreSQL. Não foi criado bypass nem usada credencial ou dado de produção.
+- Certificação final desta etapa: suíte completa, typecheck, lint e `git diff --check` registrados
+  no relatório da sessão. Nenhum commit, push, deploy ou alteração em produção foi realizado.

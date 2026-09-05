@@ -4,10 +4,11 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 import { calcularPropostasRetornoAction, confirmarRetornosAction } from "@/lib/proximos-retornos-actions";
 import { concluirAtendimentoAction, createAtendimentoAction, iniciarAtendimentoDoAgendamentoAction } from "@/lib/atendimentos-actions";
-import { createAgendamentoAction, updateStatusAgendamentoAction } from "@/lib/agenda-actions";
+import { createAgendamentoAction, reagendarAgendamentoAction, updateStatusAgendamentoAction } from "@/lib/agenda-actions";
 import { prisma } from "@/lib/db";
-import { parseDateISO } from "@/lib/date";
+import { parseDateISO, formatDateISO, formatDateMMDDYYYY, addDays } from "@/lib/date";
 import { diaSemanaDeData } from "@/lib/configuracoes-mock";
+import { getConfiguracoes } from "@/lib/configuracoes-repo";
 import { criarClienteTeste } from "../helpers/ledger-fixtures";
 import { proximaDataAgendaTeste } from "../helpers/agenda-fixtures";
 import {
@@ -381,5 +382,209 @@ describe("confirmarRetornosAction — gravação definitiva (Fase 5C)", () => {
     await expect(
       confirmarRetornosAction({ atendimentoId: atendimento.id, selecionados: [{ servicoId: servico.id, dataIso: "2027-06-15", horarioMin: 600 }], colisoes: [] }),
     ).rejects.toThrow("Só é possível gerar retornos de um atendimento concluído.");
+  });
+
+  describe("fecha o loop: Atendimento.proximoAgendamentoId", () => {
+    it("aponta para o agendamento do retorno após a confirmação", async () => {
+      const servico = await criarServicoComRetorno({ retornoSugeridoDias: 14, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({ servicos: [servicoParaAtendimento(servico)] });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+
+      const res = await confirmarRetornosAction({ atendimentoId, selecionados: [selecaoDe(previa.propostas[0])], colisoes: [] });
+      const gravado = res.itens.find((i) => i.tipo === "gravado");
+      if (gravado?.tipo !== "gravado") throw new Error("esperava gravado");
+
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBe(gravado.agendamentoId);
+    });
+
+    it("com vários retornos separados, aponta para o de data/horário mais próximo", async () => {
+      const cedo = await criarServicoComRetorno({ retornoSugeridoDias: 10, duracaoPadrao: 60 });
+      const tarde = await criarServicoComRetorno({ retornoSugeridoDias: 40, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({
+        servicos: [servicoParaAtendimento(cedo), servicoParaAtendimento(tarde)],
+      });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const res = await confirmarRetornosAction({ atendimentoId, selecionados: previa.propostas.map(selecaoDe), colisoes: [] });
+
+      const gravados = res.itens.filter((i): i is Extract<typeof i, { tipo: "gravado" }> => i.tipo === "gravado");
+      expect(gravados).toHaveLength(2);
+      const maisCedo = gravados
+        .slice()
+        .sort((a, b) => a.dataIso.localeCompare(b.dataIso) || a.inicioMin - b.inicioMin)[0];
+
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBe(maisCedo.agendamentoId);
+    });
+
+    it("no modo combinado, aponta para o único agendamento", async () => {
+      const a = await criarServicoComRetorno({ retornoSugeridoDias: 30, duracaoPadrao: 60 });
+      const b = await criarServicoComRetorno({ retornoSugeridoDias: 30, duracaoPadrao: 45 });
+      const { atendimentoId } = await criarAtendimentoConcluido({
+        servicos: [servicoParaAtendimento(a), servicoParaAtendimento(b)],
+        horarioInicio: "10:00 AM",
+      });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const grupo = previa.colisoes[0];
+      const res = await confirmarRetornosAction({
+        atendimentoId,
+        selecionados: previa.propostas.map(selecaoDe),
+        colisoes: [{ servicoIds: grupo.propostas.map((p) => p.origem.servicoId), decisao: "combinado", horarioMin: grupo.horarioMin }],
+      });
+
+      const agendamentoIds = new Set(res.itens.flatMap((i) => (i.tipo === "gravado" ? [i.agendamentoId] : [])));
+      expect(agendamentoIds.size).toBe(1);
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBe([...agendamentoIds][0]);
+    });
+
+    it("permanece nulo quando nenhum retorno é gravado", async () => {
+      const servico = await criarServicoComRetorno({ retornoSugeridoDias: 7, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({ servicos: [servicoParaAtendimento(servico)] });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const diaRetorno = diaSemanaDeData(parseDateISO(previa.propostas[0].dataIso));
+      const restaurar = await excluirDiaDeFuncionamento(diaRetorno);
+      try {
+        const res = await confirmarRetornosAction({
+          atendimentoId,
+          selecionados: [{ servicoId: servico.id, dataIso: previa.propostas[0].dataIso, horarioMin: 10 * 60 }],
+          colisoes: [],
+        });
+        expect(res.gravados).toBe(0);
+        const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+        expect(row.proximoAgendamentoId).toBeNull();
+      } finally {
+        await restaurar();
+      }
+    });
+
+    it("clique repetido não muda o ponteiro (idempotente)", async () => {
+      const servico = await criarServicoComRetorno({ retornoSugeridoDias: 14 });
+      const { atendimentoId } = await criarAtendimentoConcluido({ servicos: [servicoParaAtendimento(servico)] });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const payload = { atendimentoId, selecionados: [selecaoDe(previa.propostas[0])], colisoes: [] as never[] };
+
+      await confirmarRetornosAction(payload);
+      const primeiro = (await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } })).proximoAgendamentoId;
+      await confirmarRetornosAction(payload);
+      const segundo = (await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } })).proximoAgendamentoId;
+
+      expect(primeiro).not.toBeNull();
+      expect(segundo).toBe(primeiro);
+    });
+
+    it("ignora um retorno mais cedo que já deixou de ser 'próximo' (concluído/em atendimento/não compareceu)", async () => {
+      const cedo = await criarServicoComRetorno({ retornoSugeridoDias: 10, duracaoPadrao: 60 });
+      const tarde = await criarServicoComRetorno({ retornoSugeridoDias: 40, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({
+        servicos: [servicoParaAtendimento(cedo), servicoParaAtendimento(tarde)],
+      });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const primeiraConfirmacao = await confirmarRetornosAction({
+        atendimentoId,
+        selecionados: previa.propostas.map(selecaoDe),
+        colisoes: [],
+      });
+      const gravados = primeiraConfirmacao.itens.filter((i): i is Extract<typeof i, { tipo: "gravado" }> => i.tipo === "gravado");
+      const maisCedo = gravados.slice().sort((a, b) => a.dataIso.localeCompare(b.dataIso) || a.inicioMin - b.inicioMin)[0];
+      const maisTarde = gravados.find((g) => g.agendamentoId !== maisCedo.agendamentoId)!;
+
+      // confirma o cenário-base: o ponteiro está no mais cedo.
+      expect((await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } })).proximoAgendamentoId).toBe(
+        maisCedo.agendamentoId,
+      );
+
+      // o retorno mais cedo "aconteceu" (virou emAtendimento) — já não é mais um agendamento futuro.
+      await prisma.agendamento.update({ where: { id: maisCedo.agendamentoId }, data: { status: "emAtendimento" } });
+
+      // reconfirmar (idempotente: ambos já existem) precisa recalcular o ponteiro para o único que
+      // ainda é um agendamento futuro de verdade — nunca para o que já está em atendimento.
+      await confirmarRetornosAction({ atendimentoId, selecionados: previa.propostas.map(selecaoDe), colisoes: [] });
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBe(maisTarde.agendamentoId);
+    });
+
+    it("ignora um retorno cuja data já passou, mesmo com status 'aguardando'", async () => {
+      const servico = await criarServicoComRetorno({ retornoSugeridoDias: 14, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({ servicos: [servicoParaAtendimento(servico)] });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const res = await confirmarRetornosAction({ atendimentoId, selecionados: [selecaoDe(previa.propostas[0])], colisoes: [] });
+      const gravado = res.itens.find((i) => i.tipo === "gravado");
+      if (gravado?.tipo !== "gravado") throw new Error("esperava gravado");
+
+      // o tempo passou e ninguém confirmou/cancelou esse agendamento — data no passado, status intocado.
+      const ontemIso = formatDateISO(addDays(new Date(), -1));
+      await prisma.agendamento.update({ where: { id: gravado.agendamentoId }, data: { data: ontemIso } });
+
+      await confirmarRetornosAction({ atendimentoId, selecionados: [selecaoDe(previa.propostas[0])], colisoes: [] });
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBeNull();
+    });
+
+    it("ao cancelar o retorno mais próximo pela Agenda, avança o ponteiro para o seguinte", async () => {
+      const cedo = await criarServicoComRetorno({ retornoSugeridoDias: 10, duracaoPadrao: 60 });
+      const tarde = await criarServicoComRetorno({ retornoSugeridoDias: 40, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({
+        servicos: [servicoParaAtendimento(cedo), servicoParaAtendimento(tarde)],
+      });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const res = await confirmarRetornosAction({
+        atendimentoId,
+        selecionados: previa.propostas.map(selecaoDe),
+        colisoes: [],
+      });
+      const gravados = res.itens.filter((i): i is Extract<typeof i, { tipo: "gravado" }> => i.tipo === "gravado");
+      const ordenados = gravados.slice().sort((a, b) => a.dataIso.localeCompare(b.dataIso) || a.inicioMin - b.inicioMin);
+
+      await updateStatusAgendamentoAction(ordenados[0].agendamentoId, "cancelado");
+
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBe(ordenados[1].agendamentoId);
+    });
+
+    it("ao reagendar um retorno, recalcula qual dos retornos é o mais próximo", async () => {
+      const cedo = await criarServicoComRetorno({ retornoSugeridoDias: 10, duracaoPadrao: 60 });
+      const tarde = await criarServicoComRetorno({ retornoSugeridoDias: 40, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({
+        servicos: [servicoParaAtendimento(cedo), servicoParaAtendimento(tarde)],
+      });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const res = await confirmarRetornosAction({
+        atendimentoId,
+        selecionados: previa.propostas.map(selecaoDe),
+        colisoes: [],
+      });
+      const gravados = res.itens.filter((i): i is Extract<typeof i, { tipo: "gravado" }> => i.tipo === "gravado");
+      const ordenados = gravados.slice().sort((a, b) => a.dataIso.localeCompare(b.dataIso) || a.inicioMin - b.inicioMin);
+      let dataDepoisDeTodosDate = addDays(parseDateISO(ordenados[1].dataIso), 30);
+      const configuracoes = await getConfiguracoes();
+      while (!configuracoes.agenda.diasFuncionamento.includes(diaSemanaDeData(dataDepoisDeTodosDate))) {
+        dataDepoisDeTodosDate = addDays(dataDepoisDeTodosDate, 1);
+      }
+      const dataDepoisDeTodos = formatDateMMDDYYYY(dataDepoisDeTodosDate);
+
+      await reagendarAgendamentoAction(ordenados[0].agendamentoId, dataDepoisDeTodos, 10 * 60, 11 * 60);
+
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBe(ordenados[1].agendamentoId);
+    });
+
+    it("ao iniciar o atendimento do retorno, ele deixa de ser o próximo agendamento", async () => {
+      const servico = await criarServicoComRetorno({ retornoSugeridoDias: 14, duracaoPadrao: 60 });
+      const { atendimentoId } = await criarAtendimentoConcluido({ servicos: [servicoParaAtendimento(servico)] });
+      const previa = await calcularPropostasRetornoAction(atendimentoId);
+      const res = await confirmarRetornosAction({
+        atendimentoId,
+        selecionados: [selecaoDe(previa.propostas[0])],
+        colisoes: [],
+      });
+      const gravado = res.itens.find((i) => i.tipo === "gravado");
+      if (gravado?.tipo !== "gravado") throw new Error("esperava gravado");
+
+      await iniciarAtendimentoDoAgendamentoAction(gravado.agendamentoId);
+
+      const row = await prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId } });
+      expect(row.proximoAgendamentoId).toBeNull();
+    });
   });
 });
